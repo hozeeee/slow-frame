@@ -37,9 +37,64 @@ GitHub Actions 是 GitHub 内置的 CI/CD 服务。在仓库的 `.github/workflo
 
 ### 2. `deploy-pages.yml` —— 部署 GitHub Pages
 
-- **触发**：推送到 `main`、手动触发
-- **流程**：`npm run build:web` → 上传 `dist/web` → 部署到 GitHub Pages
-- **访问地址**：`https://<用户名>.github.io/<仓库名>/`（`vite.config.ts` 中 `base: './'`，子路径无需额外配置）
+GitHub Pages 是 GitHub 提供的静态网站托管服务。本项目是纯前端应用，不依赖服务器端程序，因此可以直接托管。当前部署地址：
+
+- **在线访问**：<https://hozeeee.github.io/slow-frame/>
+- **触发方式**：推送到 `main`，或在 Actions 页面手动运行
+- **部署流程**：安装依赖 → 构建 `dist/web` → 上传 Pages artifact → 发布到 `github-pages` 环境
+
+#### 触发与权限
+
+```yaml
+on:
+  push:
+    branches: [main] # main 更新后自动部署
+  workflow_dispatch: # 允许在 Actions 页面手动部署
+
+permissions:
+  contents: read # 读取仓库代码
+  pages: write # 发布 GitHub Pages
+  id-token: write # 获取 Pages 部署使用的 OIDC 身份令牌
+```
+
+#### 并发控制
+
+```yaml
+concurrency:
+  group: pages
+  cancel-in-progress: false
+```
+
+所有 Pages 部署共用 `pages` 并发组。`cancel-in-progress: false` 表示新部署会等待正在执行的部署完成，避免线上发布在中途被取消。
+
+#### 构建任务
+
+`build` job 在 Node.js 22 环境中执行以下步骤：
+
+1. `actions/checkout@v4`：拉取仓库代码。
+2. `actions/setup-node@v4`：安装 Node.js 22，并启用 npm 下载缓存。
+3. `npm ci`：严格按照 `package-lock.json` 安装依赖。
+4. `npm run build:web`：类型检查并把网站构建到 `dist/web`。
+5. `actions/configure-pages@v5`：读取并配置 Pages 环境。
+6. `actions/upload-pages-artifact@v3`：把 `dist/web` 上传为待部署的 Pages artifact。
+
+#### 部署任务
+
+`deploy` job 通过 `needs: build` 等待构建成功，然后在 `github-pages` environment 中调用 `actions/deploy-pages@v4`。部署完成后，action 返回的 `page_url` 会显示在 workflow 的部署摘要和仓库 Environments 页面中。
+
+```yaml
+deploy:
+  needs: build
+  runs-on: ubuntu-latest
+  environment:
+    name: github-pages
+    url: ${{ steps.deployment.outputs.page_url }}
+  steps:
+    - id: deployment
+      uses: actions/deploy-pages@v4
+```
+
+`vite.config.ts` 使用 `base: './'`，静态资源采用相对路径，所以部署在 `/slow-frame/` 子路径下无需修改资源基地址。首次部署前，需要在仓库 **Settings → Pages → Build and deployment** 中将 **Source** 设为 **GitHub Actions**。
 
 ### 3. `release.yml` —— 发布版本
 
@@ -218,24 +273,15 @@ jobs:
 | `outputs` | 向下游 job 传递数据 | 见下方示例 |
 | `steps` | 步骤列表 | 见下一节 |
 
-**依赖与条件**（本项目 `deploy-pages.yml` 的写法）：
+**依赖与条件**：上面的 Deploy Pages 章节展示了本项目的完整写法。`deploy` 使用 `needs: build`，仅在构建成功后运行；也可以额外使用 `if` 限制 job 的执行条件。
 
 ```yaml
 jobs:
-  build:
+  deploy:
+    needs: build
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps: [...]
-
-  deploy:
-    needs: build # build 成功后才执行
-    if: github.event_name == 'push' # 仅推送时部署，手动或其他事件跳过
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
 ```
 
 **矩阵构建**（例如在多个 Node 版本和系统上测试）：

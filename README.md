@@ -4,6 +4,12 @@
 
 纯前端的视频区间变速工具：在浏览器里选中视频的若干时间区间，对每段设置任意播放倍率（慢放或加速），配合时长裁剪和画面裁剪，最后直接在本地导出新视频。全程基于 WebCodecs，**视频文件不会上传到任何服务器**。
 
+## 在线使用
+
+访问 GitHub Pages：<https://hozeeee.github.io/slow-frame/>
+
+网站通过 GitHub Actions 自动构建并部署。需要支持 WebCodecs 的现代浏览器，推荐使用最新版 Chrome、Edge 或 Safari。
+
 ## 功能
 
 - **多格式导入**：支持 MP4 / MOV / WebM 等浏览器可解码的视频，导入时检查容器、视频和音频的编码支持情况。
