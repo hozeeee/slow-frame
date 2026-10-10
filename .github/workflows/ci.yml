@@ -1,0 +1,42 @@
+# 持续集成：每次推送 / PR 都跑 lint、类型检查和两种产物的构建
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      # build 脚本内部会先执行 tsc -b（TypeScript 7），再依次构建 single 与 web
+      - name: Typecheck & Build
+        run: npm run build
+
+      - name: Upload single-file build
+        uses: actions/upload-artifact@v4
+        with:
+          name: slow-frame-single
+          path: dist/single/index.html
+          retention-days: 7

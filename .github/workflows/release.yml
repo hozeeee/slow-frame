@@ -1,0 +1,33 @@
+# 发布版本：推送 v* 标签（如 git tag v0.1.0 && git push origin v0.1.0）时，
+# 构建单文件产物并作为附件上传到 GitHub Release，用户下载后双击即可离线使用
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build:single
+
+      - name: Rename artifact
+        run: cp dist/single/index.html "slow-frame-${GITHUB_REF_NAME}.html"
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: slow-frame-${{ github.ref_name }}.html
+          generate_release_notes: true
