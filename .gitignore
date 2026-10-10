@@ -1,4 +1,24 @@
+# 依赖与构建产物
 node_modules
 dist
 *.tsbuildinfo
+
+# 日志
+*.log
+npm-debug.log*
+
+# 本地环境变量
+.env
+.env.*
+!.env.example
+*.local
+
+# 工具缓存
+.eslintcache
+.vite
+
+# 编辑器 / 系统文件（.vscode 为项目共享配置，需提交）
+.idea
+*.swp
 .DS_Store
+Thumbs.db
