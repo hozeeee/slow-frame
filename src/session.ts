@@ -1,11 +1,13 @@
 import type { ExportFormat, ExportQuality, MediaInfo } from './media'
-import type { CropRect, SpeedRange, TrimRange } from './timeMap'
+import type { CropRect, FlipState, SpeedRange, TrimRange } from './timeMap'
 import {
   clampCrop,
   clampRange,
   clampTrim,
 
+  isFlipped,
   isFullFrame,
+  NO_FLIP,
   sortRanges,
 
 } from './timeMap'
@@ -16,6 +18,8 @@ export interface EditState {
   trim: TrimRange
   crop: CropRect | null
   cropAspect: number | null
+  /** 画面镜像；旧版本的记录没有该字段，按未镜像处理。 */
+  flip: FlipState
   quality: ExportQuality
   format: ExportFormat
 }
@@ -68,7 +72,7 @@ export function describeFile(file: File, info: MediaInfo): SessionFile {
 }
 
 export function defaultEdit(info: MediaInfo): EditState {
-  return { ranges: [], trim: { start: 0, end: info.duration }, crop: null, cropAspect: null, quality: 'high', format: 'mp4' }
+  return { ranges: [], trim: { start: 0, end: info.duration }, crop: null, cropAspect: null, flip: NO_FLIP, quality: 'high', format: 'mp4' }
 }
 
 const round = (value: number) => Math.round(value * 10_000) / 10_000
@@ -80,6 +84,8 @@ export function snapshotOf(edit: EditState): string {
     trim: [round(edit.trim.start), round(edit.trim.end)],
     crop: edit.crop && [edit.crop.left, edit.crop.top, edit.crop.width, edit.crop.height],
     cropAspect: edit.cropAspect && round(edit.cropAspect),
+    // 未镜像时不写入该字段，保证旧版本缓存里的快照仍然可以直接比较；旧记录的 edit 也可能没有 flip。
+    ...(isFlipped(edit.flip ?? NO_FLIP) ? { flip: [edit.flip.horizontal, edit.flip.vertical] } : {}),
     quality: edit.quality,
     format: edit.format,
   })
@@ -118,9 +124,11 @@ export function normalizeEdit(raw: unknown, info: MediaInfo): EditState {
   }
 
   const cropAspect = finite(data.cropAspect) && data.cropAspect > 0 ? data.cropAspect : null
+  const rawFlip = (data.flip ?? {}) as Partial<Record<keyof FlipState, unknown>>
+  const flip: FlipState = { horizontal: rawFlip.horizontal === true, vertical: rawFlip.vertical === true }
   const quality = QUALITIES.includes(data.quality as ExportQuality) ? data.quality as ExportQuality : 'high'
   const format = FORMATS.includes(data.format as ExportFormat) ? data.format as ExportFormat : 'mp4'
-  return { ranges, trim, crop, cropAspect, quality, format }
+  return { ranges, trim, crop, cropAspect, flip, quality, format }
 }
 
 export function buildExport(file: SessionFile, edit: EditState): SessionExport {

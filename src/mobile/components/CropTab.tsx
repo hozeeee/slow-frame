@@ -1,5 +1,5 @@
 import type { MediaInfo } from '../../media'
-import type { CropRect, TrimRange } from '../../timeMap'
+import type { CropRect, FlipAxis, FlipState, TrimRange } from '../../timeMap'
 import { formatTime } from '../../timeMap'
 import { NumberField } from './NumberField'
 
@@ -19,6 +19,7 @@ interface CropTabProps {
   crop: CropRect | null
   cropAspect: number | null
   cropEditing: boolean
+  flip: FlipState
   currentTime: number
   frameStep: number
   exporting: boolean
@@ -30,10 +31,11 @@ interface CropTabProps {
   onAspectChange: (aspect: number | null) => void
   onCropReset: () => void
   onToggleEditing: () => void
+  onToggleFlip: (axis: FlipAxis) => void
 }
 
 export function CropTab(props: CropTabProps) {
-  const { info, trim, crop, cropAspect, cropEditing, currentTime, frameStep, exporting, isTrimmed, outputWidth, outputHeight } = props
+  const { info, trim, crop, cropAspect, cropEditing, flip, currentTime, frameStep, exporting, isTrimmed, outputWidth, outputHeight } = props
   return (
     <section className="m-panel">
       <div className="m-card">
@@ -93,6 +95,28 @@ export function CropTab(props: CropTabProps) {
           {outputHeight}
           {crop && ` · 偏移 ${crop.left}, ${crop.top}`}
         </p>
+      </div>
+
+      <div className="m-card">
+        <div className="m-card-head">
+          <div>
+            <p className="m-kicker">MIRROR</p>
+            <h3>画面镜像</h3>
+          </div>
+        </div>
+        <div className="m-toggle-row">
+          <button type="button" className={`m-toggle ${flip.horizontal ? 'active' : ''}`} aria-pressed={flip.horizontal} disabled={exporting} onClick={() => props.onToggleFlip('horizontal')}>
+            <span aria-hidden="true">⇋</span>
+            水平镜像
+            <small>左右翻转</small>
+          </button>
+          <button type="button" className={`m-toggle ${flip.vertical ? 'active' : ''}`} aria-pressed={flip.vertical} disabled={exporting} onClick={() => props.onToggleFlip('vertical')}>
+            <span aria-hidden="true">⇅</span>
+            垂直翻转
+            <small>上下颠倒</small>
+          </button>
+        </div>
+        <p className="m-card-foot">预览画面会同步镜像；已有的裁剪框会跟着画面一起翻转。</p>
       </div>
     </section>
   )

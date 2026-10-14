@@ -1,6 +1,6 @@
 import type { ExportFormat, ExportQuality, MediaInfo } from './media'
 import type { EditState, SessionRecord } from './session'
-import type { CropRect, SpeedRange, TrimRange } from './timeMap'
+import type { CropRect, FlipAxis, FlipState, SpeedRange, TrimRange } from './timeMap'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { browserCapabilityError, exportExtension, exportVideo, inspectMedia } from './media'
 import {
@@ -18,14 +18,17 @@ import {
   centeredCrop,
   clampRange,
   clampTrim,
+  flipCrop,
   formatTime,
   freeSpanFor,
   gapAt,
+  isFlipped,
   isFullFrame,
   isRangeValid,
   makeRange,
   MIN_RANGE_SECONDS,
   MIN_TRIM_SECONDS,
+  NO_FLIP,
   outputDuration,
   rangesOverlap,
   sortRanges,
@@ -49,6 +52,7 @@ export function useEditor() {
   const [crop, setCrop] = useState<CropRect | null>(null)
   const [cropAspect, setCropAspect] = useState<number | null>(null)
   const [cropEditing, setCropEditing] = useState(false)
+  const [flip, setFlip] = useState<FlipState>(NO_FLIP)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [currentTime, setCurrentTime] = useState(0)
   const previewTimeRef = useRef(0)
@@ -78,7 +82,7 @@ export function useEditor() {
   const activeSpeed = speedAt(currentTime, ranges)
   const isTrimmed = info ? trim.start > 1e-3 || trim.end < info.duration - 1e-3 : false
 
-  const edit = useMemo<EditState>(() => ({ ranges, trim, crop, cropAspect, quality, format }), [ranges, trim, crop, cropAspect, quality, format])
+  const edit = useMemo<EditState>(() => ({ ranges, trim, crop, cropAspect, flip, quality, format }), [ranges, trim, crop, cropAspect, flip, quality, format])
   const snapshot = useMemo(() => snapshotOf(edit), [edit])
   const emptySnapshot = useMemo(() => info ? snapshotOf(defaultEdit(info)) : '', [info])
   const dirty = Boolean(file && info && sessionReady && snapshot !== baseline)
@@ -94,6 +98,8 @@ export function useEditor() {
       parts.push(`时长裁剪 ${formatTime(restored.trim.start)} – ${formatTime(restored.trim.end)}`)
     if (restored.crop)
       parts.push(`画面裁剪 ${restored.crop.width}×${restored.crop.height}`)
+    if (isFlipped(restored.flip))
+      parts.push([restored.flip.horizontal && '水平镜像', restored.flip.vertical && '垂直翻转'].filter(Boolean).join(' + '))
     return parts.join(' · ')
   }, [pendingRestore, info])
 
@@ -251,6 +257,7 @@ export function useEditor() {
     setTrim(next.trim)
     setCrop(next.crop)
     setCropAspect(next.cropAspect)
+    setFlip(next.flip)
     setQuality(next.quality)
     setFormat(next.format)
     setSelectedId(null)
@@ -271,6 +278,7 @@ export function useEditor() {
     setCrop(null)
     setCropAspect(null)
     setCropEditing(false)
+    setFlip(NO_FLIP)
     setQuality('high')
     setFormat('mp4')
     setSelectedId(null)
@@ -457,6 +465,15 @@ export function useEditor() {
     setCropAspect(null)
   }
 
+  const toggleFlip = (axis: FlipAxis) => {
+    if (!info)
+      return
+    setFlip(current => ({ ...current, [axis]: !current[axis] }))
+    // 裁剪框跟着画面一起翻转，框住的仍是同一块内容。
+    if (crop)
+      setCrop(flipCrop(crop, axis, info.width, info.height))
+  }
+
   const seek = (time: number) => {
     previewTimeRef.current = time
     if (videoRef.current)
@@ -498,6 +515,7 @@ export function useEditor() {
         ranges: orderedRanges,
         trim,
         crop,
+        flip,
         quality,
         format,
         signal: controller.signal,
@@ -535,6 +553,7 @@ export function useEditor() {
     crop,
     cropAspect,
     cropEditing,
+    flip,
     selectedId,
     currentTime,
     isPreviewPlaying,
@@ -582,6 +601,7 @@ export function useEditor() {
     updateCrop,
     chooseAspect,
     resetCrop,
+    toggleFlip,
     seek,
     togglePreview,
     beginExport,

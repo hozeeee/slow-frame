@@ -1,5 +1,5 @@
 import type { AudioCodec, OutputFormat, VideoCodec, VideoSample } from 'mediabunny'
-import type { CropRect, SpeedRange, TrimRange } from './timeMap'
+import type { CropRect, FlipState, SpeedRange, TrimRange } from './timeMap'
 import {
   ALL_FORMATS,
 
@@ -18,7 +18,7 @@ import {
 
   WebMOutputFormat,
 } from 'mediabunny'
-import { sourceToOutputTime, speedAt, trimmedRanges } from './timeMap'
+import { isFlipped, sourceToOutputTime, speedAt, trimmedRanges } from './timeMap'
 
 export interface MediaInfo {
   duration: number
@@ -47,8 +47,9 @@ export interface ExportOptions {
   ranges: SpeedRange[]
   /** 保留的源视频时间段。 */
   trim: TrimRange
-  /** 画面裁剪区域；为空表示保留完整画面。 */
+  /** 画面裁剪区域（镜像后的坐标系）；为空表示保留完整画面。 */
   crop: CropRect | null
+  flip: FlipState
   quality: ExportQuality
   format: ExportFormat
   onProgress: (progress: number) => void
@@ -235,6 +236,11 @@ export async function exportVideo(file: File, options: ExportOptions): Promise<B
         quality: qualityValue(options.quality),
         forceTranscode: true,
         keyFrameInterval: 2,
+        // mediabunny 只提供水平翻转：垂直翻转 = 旋转 180° 再水平翻转。
+        // 翻转在裁剪之前执行，所以裁剪框使用镜像后的坐标。镜像时直接写入画面，不依赖播放器识别变换元数据。
+        rotate: options.flip.vertical ? 180 : 0,
+        flip: options.flip.horizontal !== options.flip.vertical,
+        allowTransformationMetadata: !isFlipped(options.flip),
         crop: options.crop ?? undefined,
         process: sample => retimeVideo(sample, ranges),
       },

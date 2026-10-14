@@ -22,6 +22,16 @@ export interface CropRect {
   height: number
 }
 
+/** 画面镜像：horizontal 为左右镜像，vertical 为上下翻转。 */
+export interface FlipState {
+  horizontal: boolean
+  vertical: boolean
+}
+
+export type FlipAxis = keyof FlipState
+
+export const NO_FLIP: FlipState = { horizontal: false, vertical: false }
+
 export interface Bounds {
   min: number
   max: number
@@ -175,6 +185,23 @@ export function centeredCrop(aspect: number, videoWidth: number, videoHeight: nu
   const width = videoWidth / videoHeight > aspect ? videoHeight * aspect : videoWidth
   const height = width / aspect
   return clampCrop({ left: (videoWidth - width) / 2, top: (videoHeight - height) / 2, width, height }, videoWidth, videoHeight)
+}
+
+export function isFlipped(flip: FlipState): boolean {
+  return flip.horizontal || flip.vertical
+}
+
+/** 裁剪框以镜像后的画面为坐标系，翻转时同步翻转裁剪框，使框住的内容保持不变。 */
+export function flipCrop(crop: CropRect, axis: FlipAxis, videoWidth: number, videoHeight: number): CropRect {
+  const next = axis === 'horizontal'
+    ? { ...crop, left: videoWidth - crop.left - crop.width }
+    : { ...crop, top: videoHeight - crop.top - crop.height }
+  return clampCrop(next, videoWidth, videoHeight)
+}
+
+/** 预览画面使用的 CSS transform，与导出结果的镜像方向一致。 */
+export function flipTransform(flip: FlipState): string | undefined {
+  return isFlipped(flip) ? `scale(${flip.horizontal ? -1 : 1}, ${flip.vertical ? -1 : 1})` : undefined
 }
 
 export function makeRange(start: number, end: number, speed = 0.5): SpeedRange {

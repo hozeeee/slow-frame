@@ -68,7 +68,7 @@ body:has(.m-app) { margin: 0; min-width: 0; background: #f2f1ed; overscroll-beha
 .m-features li { padding: 7px 11px; border: 1px solid var(--line); border-radius: 999px; background: rgba(255, 255, 255, .6); font-size: 12px; font-weight: 650; }
 .m-welcome-actions { display: grid; gap: 12px; text-align: center; }
 .m-welcome-actions small { color: var(--muted); font-size: 12px; line-height: 1.5; }
-.m-switch-link { color: var(--muted); font-size: 13px; }
+.m-switch-link { justify-self: center; min-height: 36px; padding: 0 12px; border: 0; background: transparent; color: var(--muted); font-size: 13px; text-decoration: underline; }
 .m-error { margin: 10px 0; padding: 11px 14px; border-radius: 12px; background: #fde8e3; color: #a42c15; font-size: 13px; line-height: 1.5; }
 
 /* 工作区整体布局：固定铺满视口，只有标签页内容滚动 */
@@ -237,6 +237,14 @@ body:has(.m-app) { margin: 0; min-width: 0; background: #f2f1ed; overscroll-beha
 .m-progress-track { height: 8px; border-radius: 999px; background: #efeee9; overflow: hidden; }
 .m-progress-track i { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width .2s; }
 .m-result-actions { display: grid; gap: 9px; }
+.m-toggle-row { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.m-toggle { min-height: 76px; padding: 10px 8px; border: 1px solid var(--line); border-radius: 13px; display: grid; justify-items: center; align-content: center; gap: 2px; background: var(--paper); font-size: 14px; font-weight: 750; }
+.m-toggle span { font-size: 22px; line-height: 1.1; color: var(--accent); }
+.m-toggle small { color: var(--muted); font-size: 11px; font-weight: 500; }
+.m-toggle.active { border-color: var(--ink); background: var(--ink); color: white; }
+.m-toggle.active span { color: white; }
+.m-toggle.active small { color: rgba(255, 255, 255, .7); }
+.m-toggle:disabled { opacity: .45; }
 
 /* 底部标签栏 */
 .m-tabbar { flex: none; padding: 0 var(--safe-right) var(--safe-bottom) var(--safe-left); display: flex; background: var(--paper); border-top: 1px solid var(--line); }

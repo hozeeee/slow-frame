@@ -1,6 +1,6 @@
 import type { MediaInfo } from '../media'
-import type { CropRect, TrimRange } from '../timeMap'
-import { formatTime } from '../timeMap'
+import type { CropRect, FlipAxis, FlipState, TrimRange } from '../timeMap'
+import { formatTime, isFlipped } from '../timeMap'
 import { NumberInput } from './NumberInput'
 
 const ASPECT_PRESETS: { label: string, value: (width: number, height: number) => number | null }[] = [
@@ -19,6 +19,7 @@ interface CropPanelProps {
   crop: CropRect | null
   cropAspect: number | null
   cropEditing: boolean
+  flip: FlipState
   currentTime: number
   exporting: boolean
   isTrimmed: boolean
@@ -29,16 +30,17 @@ interface CropPanelProps {
   onAspectChange: (aspect: number | null) => void
   onCropReset: () => void
   onToggleEditing: () => void
+  onToggleFlip: (axis: FlipAxis) => void
 }
 
 export function CropPanel(props: CropPanelProps) {
-  const { info, trim, crop, cropAspect, cropEditing, currentTime, exporting, isTrimmed, outputWidth, outputHeight } = props
+  const { info, trim, crop, cropAspect, cropEditing, flip, currentTime, exporting, isTrimmed, outputWidth, outputHeight } = props
   return (
     <div className="crop-card">
       <div className="section-title-row">
         <div>
-          <p className="section-kicker">TRIM &amp; CROP</p>
-          <h2>裁剪</h2>
+          <p className="section-kicker">TRIM, CROP &amp; MIRROR</p>
+          <h2>裁剪与镜像</h2>
         </div>
       </div>
       <div className="crop-panel-grid">
@@ -85,12 +87,18 @@ export function CropPanel(props: CropPanelProps) {
           <button className={`secondary-button crop-toggle ${cropEditing ? 'active' : ''}`} disabled={exporting} onClick={props.onToggleEditing}>
             {cropEditing ? '✓ 完成框选' : '⌗ 在画面上框选'}
           </button>
+          <div className="flip-row">
+            <span>镜像</span>
+            <button className={flip.horizontal ? 'active' : ''} aria-pressed={flip.horizontal} disabled={exporting} onClick={() => props.onToggleFlip('horizontal')}>⇋ 水平镜像</button>
+            <button className={flip.vertical ? 'active' : ''} aria-pressed={flip.vertical} disabled={exporting} onClick={() => props.onToggleFlip('vertical')}>⇅ 垂直翻转</button>
+          </div>
           <div className="range-result">
             输出画面
             {outputWidth}
             ×
             {outputHeight}
             {crop && ` · 偏移 ${crop.left}, ${crop.top}`}
+            {isFlipped(flip) && ' · 已镜像'}
           </div>
         </div>
       </div>

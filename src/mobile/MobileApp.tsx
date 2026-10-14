@@ -1,6 +1,7 @@
 import type { ChangeEvent } from 'react'
 import { useEffect, useRef, useState } from 'react'
-import { formatBytes, formatTime } from '../timeMap'
+import { flipTransform, formatBytes, formatTime, isFlipped } from '../timeMap'
+import { switchMode } from '../uiMode'
 import { useEditor } from '../useEditor'
 import { CropOverlay } from './components/CropOverlay'
 import { CropTab } from './components/CropTab'
@@ -11,12 +12,6 @@ import { Timeline } from './components/Timeline'
 import './mobile.css'
 
 type Tab = 'ranges' | 'crop' | 'export'
-
-function desktopUrl() {
-  const url = new URL(window.location.href)
-  url.searchParams.set('ui', 'desktop')
-  return url.toString()
-}
 
 /** 导出期间保持屏幕常亮，避免手机自动锁屏导致页面被挂起、编码中断。 */
 function useWakeLock(active: boolean) {
@@ -63,6 +58,7 @@ export default function MobileApp() {
     crop,
     cropAspect,
     cropEditing,
+    flip,
     selectedId,
     currentTime,
     isPreviewPlaying,
@@ -155,7 +151,7 @@ export default function MobileApp() {
             选择视频
           </button>
           <small>文件只停留在当前页面，不会被上传 · 编辑会缓存在本浏览器</small>
-          <a className="m-switch-link" href={desktopUrl()}>切换到桌面版</a>
+          <button type="button" className="m-switch-link" onClick={() => switchMode('desktop')}>切换到桌面版</button>
         </div>
         {toast}
         {hiddenInputs}
@@ -163,7 +159,7 @@ export default function MobileApp() {
     )
   }
 
-  const cropBadge = isTrimmed || crop
+  const cropBadge = isTrimmed || crop || isFlipped(flip)
   return (
     <div className={`m-app m-workspace ${cropEditing ? 'cropping' : ''}`}>
       <header className="m-topbar">
@@ -202,6 +198,7 @@ export default function MobileApp() {
                   src={mediaUrl ?? undefined}
                   playsInline
                   preload="metadata"
+                  style={{ transform: flipTransform(flip) }}
                   onClick={cropEditing ? undefined : editor.togglePreview}
                 />
                 <CropOverlay videoWidth={info.width} videoHeight={info.height} crop={crop} aspect={cropAspect} editing={cropEditing} onChange={editor.updateCrop} />
@@ -280,6 +277,7 @@ export default function MobileApp() {
                     crop={crop}
                     cropAspect={cropAspect}
                     cropEditing={cropEditing}
+                    flip={flip}
                     currentTime={currentTime}
                     frameStep={1 / Math.max(1, info.fps)}
                     exporting={exporting}
@@ -291,6 +289,7 @@ export default function MobileApp() {
                     onAspectChange={editor.chooseAspect}
                     onCropReset={editor.resetCrop}
                     onToggleEditing={() => editor.setCropEditing(value => !value)}
+                    onToggleFlip={editor.toggleFlip}
                   />
                 )}
                 {tab === 'export' && (
@@ -403,7 +402,10 @@ export default function MobileApp() {
             >
               更换视频
             </button>
-            <a href={desktopUrl()}>切换到桌面版</a>
+            <button type="button" onClick={() => switchMode('desktop')}>
+              切换到桌面版
+              <small>会记住这次选择，编辑已自动缓存，可在桌面版恢复</small>
+            </button>
           </div>
           <button type="button" className="m-block-button ghost" onClick={closeMenu}>取消</button>
         </Sheet>

@@ -12,6 +12,10 @@ export default defineConfig(({ mode }) => {
     // 相对路径，部署到域名根目录或任意子路径都能正常加载资源
     base: './',
     plugins: isWeb ? [react()] : [react(), viteSingleFile()],
+    server: {
+      host: '0.0.0.0',
+      port: 8887,
+    },
     build: {
       target: 'es2022',
       outDir: isWeb ? 'dist/web' : 'dist/single',

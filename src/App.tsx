@@ -3,9 +3,11 @@ import { useRef, useState } from 'react'
 import { CropOverlay } from './components/CropOverlay'
 import { CropPanel } from './components/CropPanel'
 import { ExportPanel } from './components/ExportPanel'
+import { MobileSuggestion } from './components/MobileSuggestion'
 import { RangePanel } from './components/RangePanel'
 import { Timeline } from './components/Timeline'
-import { formatBytes, formatTime } from './timeMap'
+import { flipTransform, formatBytes, formatTime } from './timeMap'
+import { switchMode } from './uiMode'
 import { useEditor } from './useEditor'
 import './styles.css'
 
@@ -24,6 +26,7 @@ function App() {
     crop,
     cropAspect,
     cropEditing,
+    flip,
     selectedId,
     currentTime,
     isPreviewPlaying,
@@ -70,6 +73,7 @@ function App() {
     updateCrop,
     chooseAspect,
     resetCrop,
+    toggleFlip,
     seek,
     togglePreview,
     beginExport,
@@ -210,6 +214,7 @@ function App() {
                             src={mediaUrl ?? undefined}
                             playsInline
                             preload="metadata"
+                            style={{ transform: flipTransform(flip) }}
                             onClick={togglePreview}
                           />
                           <CropOverlay videoWidth={info.width} videoHeight={info.height} crop={crop} aspect={cropAspect} editing={cropEditing} onChange={updateCrop} />
@@ -265,6 +270,7 @@ function App() {
                           crop={crop}
                           cropAspect={cropAspect}
                           cropEditing={cropEditing}
+                          flip={flip}
                           currentTime={currentTime}
                           exporting={exporting}
                           isTrimmed={isTrimmed}
@@ -275,6 +281,7 @@ function App() {
                           onAspectChange={chooseAspect}
                           onCropReset={resetCrop}
                           onToggleEditing={() => setCropEditing(value => !value)}
+                          onToggleFlip={toggleFlip}
                         />
                       </div>
 
@@ -325,12 +332,14 @@ function App() {
           </div>
         </div>
       )}
+      {!file && <MobileSuggestion />}
       {notice && <div className="toast" role="status">{notice}</div>}
       <input ref={fileInputRef} className="file-input" type="file" accept="video/*,.mkv,.webm,.mov,.mp4" onChange={onFileChange} />
       <input ref={sessionInputRef} className="file-input" type="file" accept=".json,application/json" onChange={onSessionFileChange} />
       <footer>
         <span>Slow Frame</span>
         <p>Private by design · No uploads · No tracking</p>
+        <button className="footer-link" onClick={() => switchMode('mobile')}>切换到移动版</button>
       </footer>
     </main>
   )
