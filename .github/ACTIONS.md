@@ -107,6 +107,26 @@ deploy:
   git push origin v0.1.0
   ```
 
+- **重新发布**：如果要在同一个分支上把已发布的版本（如 `v0.1.0`）改为指向更新后的提交，只在本地移动 tag 并推送是不够的：远端已经存在同名 tag，普通推送会被拒绝，也不会再次触发 Release 工作流。正确做法是先更新本地 tag 的指向，再删除远端旧 tag，最后重新推送：
+
+  ```bash
+  git tag -f v0.1.0 f307cac            # 本地 tag 移到最新提交
+  git push origin :refs/tags/v0.1.0    # 删除远端旧 tag
+  git push origin v0.1.0               # 推送新 tag，触发 Release 工作流
+  ```
+
+  其中 `f307cac` 换成目标提交的 SHA，省略时默认指向当前 `HEAD`。查看目标提交 SHA 的常用方式：
+
+  ```bash
+  git log --oneline -n 10              # 列出最近 10 条提交，每行开头即短 SHA
+  git log --oneline -n 10 main         # 查看指定分支（如 main）的最近提交
+  git rev-parse --short HEAD           # 只输出当前 HEAD 的短 SHA
+  git rev-parse --short origin/main    # 输出远端 main 最新提交的短 SHA（先 git fetch）
+  git rev-list -n 1 v0.1.0             # 查看 tag 当前指向的提交，便于确认移动前后的变化
+  ```
+
+  也可以在 GitHub 仓库页面的 **Commits** 列表中，点击某条提交右侧的复制按钮获取完整 SHA。短 SHA（前 7 位）和完整 SHA 都可以直接用于 `git tag -f`。
+
 ## 三、首次使用步骤
 
 1. 将项目推送到 GitHub 仓库（默认主分支名为 `main`，若不同需修改 workflow 中的 `branches`）。
