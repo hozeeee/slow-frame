@@ -278,6 +278,39 @@ body:has(.m-app) { margin: 0; min-width: 0; background: #f2f1ed; overscroll-beha
 @keyframes m-fade { from { opacity: 0; } }
 @keyframes m-rise { from { transform: translateY(100%); } }
 
+/* yt-dlp 视频下载说明：移动端使用全屏面板。 */
+.m-guide { position: fixed; inset: 0; z-index: 35; min-width: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--paper); animation: m-rise .22s cubic-bezier(.2, .8, .2, 1); }
+.m-guide-bar { flex: none; min-height: calc(64px + var(--safe-top)); padding: var(--safe-top) calc(8px + var(--safe-right)) 0 calc(16px + var(--safe-left)); border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 12px; background: white; }
+.m-guide-bar h2 { font-size: 19px; letter-spacing: -.3px; }
+.m-guide-bar .m-kicker { margin-bottom: 3px; font-size: 9px; }
+.m-guide-search { flex: none; height: 48px; margin: 10px calc(16px + var(--safe-right)) 9px calc(16px + var(--safe-left)); padding: 0 11px; border: 1px solid #cbc9c2; border-radius: 13px; display: flex; align-items: center; gap: 9px; background: white; color: var(--muted); }
+.m-guide-search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(240, 90, 55, .1); }
+.m-guide-search input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: 0; background: transparent; font-size: 16px; }
+.m-guide-search input::-webkit-search-cancel-button { display: none; }
+.m-guide-search button { flex: none; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; background: #efeee9; color: var(--muted); font-size: 18px; }
+.m-guide-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 5px calc(17px + var(--safe-right)) calc(36px + var(--safe-bottom)) calc(17px + var(--safe-left)); scroll-behavior: smooth; }
+.m-guide-scroll > .m-chip-row { margin-bottom: 12px; }
+.m-guide-toc { margin: 0 0 12px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: white; }
+.m-guide-toc summary { min-height: 44px; padding: 0 13px; display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-weight: 750; cursor: pointer; list-style: none; }
+.m-guide-toc summary::-webkit-details-marker { display: none; }
+.m-guide-toc summary::after { content: '＋'; color: var(--muted); font-size: 17px; font-weight: 400; }
+.m-guide-toc[open] summary { border-bottom: 1px solid var(--line); }
+.m-guide-toc[open] summary::after { content: '−'; }
+.m-guide-toc > div { padding: 9px 13px; display: flex; flex-wrap: wrap; gap: 6px; }
+.m-guide-toc strong { width: 100%; margin-top: 4px; color: var(--muted); font-size: 10px; letter-spacing: .8px; }
+.m-guide-toc button { min-height: 32px; padding: 0 9px; border: 1px solid #e3e1db; border-radius: 8px; background: #f7f6f2; color: #4c4e52; font-size: 12px; }
+.m-guide-meta { margin: 0 0 5px; color: var(--muted); font-size: 11px; }
+.m-guide .guide-chapter { scroll-margin-top: 8px; }
+.m-guide .guide-section { scroll-margin-top: 8px; }
+.m-guide .guide-section h3 { font-size: 19px; }
+.m-guide .guide-code { margin-left: -2px; margin-right: -2px; }
+.m-guide .guide-copy { opacity: 1; }
+.m-guide-empty { min-height: 45dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.m-guide-empty > span { color: #bbb; font-size: 42px; }
+.m-guide-empty h3 { margin: 8px 0 5px; font-size: 17px; }
+.m-guide-empty p { margin-bottom: 18px; color: var(--muted); font-size: 13px; }
+.m-guide-empty .m-block-button { width: auto; min-width: 130px; }
+
 .m-toast { position: fixed; left: 50%; bottom: calc(72px + var(--safe-bottom)); z-index: 40; max-width: calc(100vw - 32px); transform: translateX(-50%); padding: 10px 16px; border-radius: 12px; background: var(--ink); color: white; font-size: 13px; line-height: 1.45; text-align: center; box-shadow: 0 8px 24px rgba(13, 14, 16, .25); pointer-events: none; animation: m-fade .2s; }
 .m-welcome .m-toast { bottom: calc(24px + var(--safe-bottom)); }
 

@@ -6,6 +6,7 @@ import { useEditor } from '../useEditor'
 import { CropOverlay } from './components/CropOverlay'
 import { CropTab } from './components/CropTab'
 import { ExportTab } from './components/ExportTab'
+import { GuideSheet } from './components/GuideSheet'
 import { RangesTab } from './components/RangesTab'
 import { Sheet } from './components/Sheet'
 import { Timeline } from './components/Timeline'
@@ -46,6 +47,7 @@ export default function MobileApp() {
   const sessionInputRef = useRef<HTMLInputElement>(null)
   const [tab, setTab] = useState<Tab>('ranges')
   const [menuOpen, setMenuOpen] = useState(false)
+  const [guideOpen, setGuideOpen] = useState(false)
   const editor = useEditor()
   const {
     videoRef,
@@ -150,9 +152,11 @@ export default function MobileApp() {
             <span aria-hidden="true">↗</span>
             选择视频
           </button>
+          <button type="button" className="m-block-button outline" onClick={() => setGuideOpen(true)}>？ 如何下载网站视频</button>
           <small>文件只停留在当前页面，不会被上传 · 编辑会缓存在本浏览器</small>
           <button type="button" className="m-switch-link" onClick={() => switchMode('desktop')}>切换到桌面版</button>
         </div>
+        {guideOpen && <GuideSheet onClose={() => setGuideOpen(false)} />}
         {toast}
         {hiddenInputs}
       </div>
@@ -397,6 +401,16 @@ export default function MobileApp() {
               type="button"
               onClick={() => {
                 closeMenu()
+                setGuideOpen(true)
+              }}
+            >
+              视频下载说明
+              <small>用 yt-dlp 获取 B站、YouTube 等网站的视频</small>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                closeMenu()
                 editor.leaveWorkspace()
               }}
             >
@@ -411,6 +425,7 @@ export default function MobileApp() {
         </Sheet>
       )}
 
+      {guideOpen && <GuideSheet onClose={() => setGuideOpen(false)} />}
       {toast}
       {hiddenInputs}
     </div>

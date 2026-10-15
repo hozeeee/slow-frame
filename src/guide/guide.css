@@ -1,0 +1,44 @@
+/* 说明文档正文样式，桌面端弹窗与移动端全屏面板共用；颜色变量由各自的根样式提供。 */
+
+.guide-article { color: var(--ink); font-size: 14px; line-height: 1.75; }
+.guide-chapter { margin: 30px 0 4px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--accent); font-size: 10px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; }
+.guide-article > .guide-chapter:first-child { margin-top: 8px; padding-top: 0; border-top: 0; }
+.guide-section { padding: 10px 0 14px; scroll-margin-top: 12px; }
+.guide-section h3 { margin: 0 0 10px; font-size: 18px; font-weight: 750; line-height: 1.4; letter-spacing: -.2px; }
+.guide-section p { margin: 0 0 10px; color: #3f4145; }
+.guide-section ul, .guide-section ol { margin: 0 0 12px; padding-left: 22px; color: #3f4145; }
+.guide-section li { margin: 4px 0; padding-left: 2px; }
+.guide-section li::marker { color: #9a9b97; font-weight: 700; }
+.guide-section strong { color: var(--ink); font-weight: 750; }
+.guide-section a { color: var(--accent); font-weight: 650; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; overflow-wrap: anywhere; }
+.guide-section a:hover { text-decoration-thickness: 2px; }
+.guide-section code { padding: 1px 5px; border-radius: 4px; background: #ebeae4; color: #2b2d31; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .88em; overflow-wrap: anywhere; }
+.guide-article mark { padding: 0 1px; border-radius: 2px; background: #ffe17d; color: inherit; }
+
+.guide-note { margin: 0 0 12px; padding: 10px 14px; border-left: 3px solid var(--fast); border-radius: 0 8px 8px 0; background: #eceefb; }
+.guide-note.warn { border-left-color: var(--accent); background: #fdebe5; }
+.guide-note b { display: block; margin-bottom: 2px; color: var(--fast); font-size: 11px; letter-spacing: 1px; }
+.guide-note.warn b { color: #c4421f; }
+.guide-section .guide-note p { margin: 0; }
+
+.guide-code { margin: 0 0 14px; overflow: hidden; border-radius: 10px; background: #1d1f24; color: #ecebe5; }
+.guide-code figcaption { padding: 8px 14px; border-bottom: 1px solid rgba(255, 255, 255, .08); color: #9d9e99; font-size: 11px; font-weight: 650; }
+.guide-code-body { padding: 8px 0; }
+.guide-code-gap { height: 8px; }
+.guide-code-line { display: flex; align-items: flex-start; gap: 10px; padding: 3px 10px 3px 14px; }
+.guide-code-line:hover { background: rgba(255, 255, 255, .05); }
+.guide-section .guide-code-line code { flex: 1; min-width: 0; padding: 0; border-radius: 0; background: transparent; color: inherit; font-size: 12.5px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+.guide-section .guide-code-line.comment code { color: #8e908b; }
+.guide-code mark { background: #ffd95e; color: #191b20; }
+.guide-copy { flex: none; margin-top: 1px; padding: 2px 9px; border: 1px solid rgba(255, 255, 255, .2); border-radius: 5px; background: transparent; color: #d4d2cb; font-size: 11px; line-height: 1.6; cursor: pointer; opacity: 0; transition: opacity .12s, color .12s, border-color .12s; }
+.guide-code-line:hover .guide-copy, .guide-copy:focus-visible, .guide-copy.copied { opacity: 1; }
+.guide-copy:hover { border-color: rgba(255, 255, 255, .5); color: white; }
+.guide-copy.copied { border-color: #5fbf7f; color: #7fd49b; }
+@media (hover: none) {
+  .guide-copy { opacity: 1; }
+}
+
+.guide-section .guide-links { padding: 0; list-style: none; display: grid; gap: 6px; }
+.guide-section .guide-links li { margin: 0; padding: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
+.guide-section .guide-links a span { margin-left: 3px; font-size: .85em; }
+.guide-links small { color: var(--muted); font-size: 12px; }

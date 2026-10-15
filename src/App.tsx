@@ -3,6 +3,7 @@ import { useRef, useState } from 'react'
 import { CropOverlay } from './components/CropOverlay'
 import { CropPanel } from './components/CropPanel'
 import { ExportPanel } from './components/ExportPanel'
+import { GuideDialog } from './components/GuideDialog'
 import { MobileSuggestion } from './components/MobileSuggestion'
 import { RangePanel } from './components/RangePanel'
 import { Timeline } from './components/Timeline'
@@ -15,6 +16,7 @@ function App() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const sessionInputRef = useRef<HTMLInputElement>(null)
   const [draggingFile, setDraggingFile] = useState(false)
+  const [guideOpen, setGuideOpen] = useState(false)
   const {
     videoRef,
     file,
@@ -109,9 +111,15 @@ function App() {
           <span className="brand-mark">S</span>
           <span>Slow Frame</span>
         </div>
-        <div className="privacy-pill">
-          <span className="status-dot" />
-          100% 浏览器本地处理
+        <div className="topbar-actions">
+          <button type="button" className="guide-button" onClick={() => setGuideOpen(true)}>
+            <b aria-hidden="true">?</b>
+            <span>视频下载说明</span>
+          </button>
+          <div className="privacy-pill">
+            <span className="status-dot" />
+            100% 浏览器本地处理
+          </div>
         </div>
       </header>
 
@@ -135,6 +143,7 @@ function App() {
                   <i />
                   <span>音画同步</span>
                 </div>
+                <button type="button" className="hero-guide-link" onClick={() => setGuideOpen(true)}>没有本地视频？查看如何用 yt-dlp 下载网站视频 →</button>
               </div>
               <div
                 className={`dropzone ${draggingFile ? 'dragging' : ''}`}
@@ -309,6 +318,7 @@ function App() {
             </section>
           )}
 
+      {guideOpen && <GuideDialog onClose={() => setGuideOpen(false)} />}
       {pendingRestore && info && (
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="restore-title">
           <div className="modal-card">
