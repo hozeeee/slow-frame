@@ -182,6 +182,7 @@ main { min-height: 100vh; display: flex; flex-direction: column; }
 .time-inputs { display: grid; grid-template-columns: 1fr 14px 1fr; gap: 5px; align-items: end; }
 .time-inputs > span { padding-bottom: 9px; color: #aaa; font-size: 10px; }
 .time-inputs label, .speed-control { color: #8a8b87; font-size: 9px; text-transform: uppercase; letter-spacing: .6px; }
+.time-hint { margin-left: 4px; color: var(--accent); font-style: normal; font-weight: 650; letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; }
 .time-inputs input { width: 100%; margin-top: 5px; padding: 7px 6px; border: 1px solid #deddd7; border-radius: 5px; background: #fafafa; color: var(--ink); font-size: 11px; font-variant-numeric: tabular-nums; outline: none; }
 .time-inputs input:focus { border-color: var(--accent); }
 .speed-control { display: block; margin-top: 11px; color: #8a8b87; font-size: 9px; text-transform: uppercase; letter-spacing: .6px; }

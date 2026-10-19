@@ -62,11 +62,13 @@ export function RangePanel({ ranges, trim, duration, selectedId, invalid, onSele
                   <div className="time-inputs">
                     <label>
                       开始（秒）
+                      <em className="time-hint">{formatTime(range.start)}</em>
                       <NumberInput min={0} max={duration} step={0.01} value={range.start} onCommit={value => onUpdate(range.id, { start: value })} />
                     </label>
                     <span>→</span>
                     <label>
                       结束（秒）
+                      <em className="time-hint">{formatTime(range.end)}</em>
                       <NumberInput min={0} max={duration} step={0.01} value={range.end} onCommit={value => onUpdate(range.id, { end: value })} />
                     </label>
                   </div>

@@ -47,14 +47,20 @@ export function CropTab(props: CropTabProps) {
           <button type="button" className="m-text-button" disabled={!isTrimmed} onClick={props.onTrimReset}>重置</button>
         </div>
         <div className="m-field">
-          <span>开始（秒）</span>
+          <span>
+            开始（秒）
+            <em className="m-field-hint">{formatTime(trim.start)}</em>
+          </span>
           <div className="m-field-row">
             <NumberField ariaLabel="导出开始" min={0} max={info.duration} step={frameStep} value={trim.start} onCommit={value => props.onTrimChange({ start: value })} />
             <button type="button" className="m-chip" onClick={() => props.onTrimChange({ start: currentTime })}>设为播放头</button>
           </div>
         </div>
         <div className="m-field">
-          <span>结束（秒）</span>
+          <span>
+            结束（秒）
+            <em className="m-field-hint">{formatTime(trim.end)}</em>
+          </span>
           <div className="m-field-row">
             <NumberField ariaLabel="导出结束" min={0} max={info.duration} step={frameStep} value={trim.end} onCommit={value => props.onTrimChange({ end: value })} />
             <button type="button" className="m-chip" onClick={() => props.onTrimChange({ end: currentTime })}>设为播放头</button>

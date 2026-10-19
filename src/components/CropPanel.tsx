@@ -52,11 +52,13 @@ export function CropPanel(props: CropPanelProps) {
           <div className="time-inputs">
             <label>
               开始（秒）
+              <em className="time-hint">{formatTime(trim.start)}</em>
               <NumberInput min={0} max={info.duration} step={0.01} value={trim.start} onCommit={value => props.onTrimChange({ start: value })} />
             </label>
             <span>→</span>
             <label>
               结束（秒）
+              <em className="time-hint">{formatTime(trim.end)}</em>
               <NumberInput min={0} max={info.duration} step={0.01} value={trim.end} onCommit={value => props.onTrimChange({ end: value })} />
             </label>
           </div>

@@ -201,11 +201,13 @@ function OverlayEditor(props: OverlayPanelProps & { layer: OverlayLayer }) {
         <div className="time-inputs">
           <label>
             出现
+            <em className="time-hint">{formatTime(layer.start)}</em>
             <NumberInput min={0} max={info.duration} step={0.01} value={layer.start} onCommit={value => props.onSpanChange(layer.id, { start: value })} />
           </label>
           <span>→</span>
           <label>
             消失
+            <em className="time-hint">{formatTime(layer.end)}</em>
             <NumberInput min={0} max={info.duration} step={0.01} value={layer.end} onCommit={value => props.onSpanChange(layer.id, { end: value })} />
           </label>
         </div>

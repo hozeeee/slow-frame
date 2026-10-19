@@ -249,14 +249,20 @@ function OverlaySettings(props: OverlayTabProps & { layer: OverlayLayer }) {
       </div>
 
       <div className="m-field">
-        <span>出现（秒）</span>
+        <span>
+          出现（秒）
+          <em className="m-field-hint">{formatTime(layer.start)}</em>
+        </span>
         <div className="m-field-row">
           <NumberField ariaLabel="图层出现时间" min={0} max={info.duration} step={frameStep} value={layer.start} onCommit={value => props.onSpanChange(layer.id, { start: value })} />
           <button type="button" className="m-chip" onClick={() => props.onSpanChange(layer.id, { start: currentTime })}>设为播放头</button>
         </div>
       </div>
       <div className="m-field">
-        <span>消失（秒）</span>
+        <span>
+          消失（秒）
+          <em className="m-field-hint">{formatTime(layer.end)}</em>
+        </span>
         <div className="m-field-row">
           <NumberField ariaLabel="图层消失时间" min={0} max={info.duration} step={frameStep} value={layer.end} onCommit={value => props.onSpanChange(layer.id, { end: value })} />
           <button type="button" className="m-chip" onClick={() => props.onSpanChange(layer.id, { end: currentTime })}>设为播放头</button>

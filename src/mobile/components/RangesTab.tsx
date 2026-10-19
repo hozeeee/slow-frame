@@ -96,14 +96,20 @@ export function RangesTab({ ranges, trim, duration, frameStep, currentTime, sele
                         </label>
 
                         <div className="m-field">
-                          <span>开始（秒）</span>
+                          <span>
+                            开始（秒）
+                            <em className="m-field-hint">{formatTime(range.start)}</em>
+                          </span>
                           <div className="m-field-row">
                             <NumberField ariaLabel="区间开始" min={0} max={duration} step={frameStep} value={range.start} onCommit={value => onUpdate(range.id, { start: value })} />
                             <button type="button" className="m-chip" onClick={() => onUpdate(range.id, { start: currentTime })}>设为播放头</button>
                           </div>
                         </div>
                         <div className="m-field">
-                          <span>结束（秒）</span>
+                          <span>
+                            结束（秒）
+                            <em className="m-field-hint">{formatTime(range.end)}</em>
+                          </span>
                           <div className="m-field-row">
                             <NumberField ariaLabel="区间结束" min={0} max={duration} step={frameStep} value={range.end} onCommit={value => onUpdate(range.id, { end: value })} />
                             <button type="button" className="m-chip" onClick={() => onUpdate(range.id, { end: currentTime })}>设为播放头</button>
