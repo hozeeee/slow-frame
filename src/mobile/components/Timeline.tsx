@@ -1,4 +1,5 @@
 import type { PointerEvent as ReactPointerEvent } from 'react'
+import type { OverlayTimeMarks } from '../../overlay'
 import type { Bounds, SpeedRange, TrimRange } from '../../timeMap'
 import { useRef, useState } from 'react'
 import {
@@ -37,6 +38,8 @@ interface TimelineProps {
   onSelect: (id: string | null) => void
   onRangesChange: (update: (current: SpeedRange[]) => SpeedRange[]) => void
   onTrimChange: (patch: Partial<TrimRange>) => void
+  /** 选中图层的显示时段与关键帧，在轨道下方单独一行标出。 */
+  overlayMarks?: OverlayTimeMarks | null
 }
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
@@ -49,7 +52,7 @@ const clamp = (value: number, min: number, max: number) => Math.max(min, Math.mi
  * - 轨道下方的把手调整时长裁剪；
  * - 双指捏合缩放，缩放后拖动刻度尺或缩略条平移视野。
  */
-export function Timeline({ duration, currentTime, ranges, trim, selectedId, onSeek, onSelect, onRangesChange, onTrimChange }: TimelineProps) {
+export function Timeline({ duration, currentTime, ranges, trim, selectedId, onSeek, onSelect, onRangesChange, onTrimChange, overlayMarks }: TimelineProps) {
   const areaRef = useRef<HTMLDivElement>(null)
   const gestureRef = useRef<Gesture | null>(null)
   const pointersRef = useRef(new Map<number, number>())
@@ -392,6 +395,24 @@ export function Timeline({ duration, currentTime, ranges, trim, selectedId, onSe
           <span data-hit="trim-end" className="m-tl-grip end" style={{ left: pct(trim.end) }}>]</span>
         </div>
       </div>
+      {overlayMarks && (
+        <div className="m-tl-lane" aria-label="选中图层的显示时段与关键帧">
+          <div className="m-tl-lane-span" style={{ left: pct(overlayMarks.start), width: widthOf(overlayMarks.end - overlayMarks.start) }} />
+          <div className="m-tl-lane-head" style={{ left: pct(currentTime) }} />
+          {overlayMarks.keyframes.map(time => (
+            <button
+              key={time}
+              type="button"
+              className={`m-tl-keyframe ${Math.abs(time - currentTime) < 1e-3 ? 'current' : ''}`}
+              style={{ left: pct(time) }}
+              aria-label={`跳到关键帧 ${formatTime(time)}`}
+              onClick={() => onSeek(time)}
+            >
+              <i />
+            </button>
+          ))}
+        </div>
+      )}
       {bubble && (
         <div className="m-tl-bubble" style={{ left: `${clamp((bubble.time - viewStart) / span, 0.12, 0.88) * 100}%` }}>{bubble.label}</div>
       )}

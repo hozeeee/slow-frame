@@ -1,4 +1,5 @@
 import type { PointerEvent as ReactPointerEvent } from 'react'
+import type { OverlayTimeMarks } from '../overlay'
 import type { Bounds, SpeedRange, TrimRange } from '../timeMap'
 import { useRef } from 'react'
 import {
@@ -32,9 +33,11 @@ interface TimelineProps {
   onSelect: (id: string) => void
   onRangesChange: (ranges: SpeedRange[]) => void
   onTrimChange: (patch: Partial<TrimRange>) => void
+  /** 选中图层的显示时段与关键帧，画在轨道下方。 */
+  overlayMarks?: OverlayTimeMarks | null
 }
 
-export function Timeline({ duration, currentTime, ranges, trim, selectedId, onSeek, onSelect, onRangesChange, onTrimChange }: TimelineProps) {
+export function Timeline({ duration, currentTime, ranges, trim, selectedId, onSeek, onSelect, onRangesChange, onTrimChange, overlayMarks }: TimelineProps) {
   const trackRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<DragState | null>(null)
   const trimDragRef = useRef<'start' | 'end' | null>(null)
@@ -191,6 +194,23 @@ export function Timeline({ duration, currentTime, ranges, trim, selectedId, onSe
         <button aria-label="拖动调整导出结束时间" title="导出结束" className="trim-handle end" style={{ left: percent(trim.end) }} onPointerDown={event => beginTrimDrag(event, 'end')} />
         <div className="playhead" style={{ left: percent(currentTime) }}><i /></div>
       </div>
+      {overlayMarks && (
+        <div className="overlay-lane" aria-label="选中图层的显示时段与关键帧">
+          <div className="overlay-lane-span" style={{ left: percent(overlayMarks.start), width: percent(overlayMarks.end - overlayMarks.start) }} />
+          <div className="overlay-lane-head" style={{ left: percent(currentTime) }} />
+          {overlayMarks.keyframes.map(time => (
+            <button
+              key={time}
+              type="button"
+              className={`overlay-keyframe ${Math.abs(time - currentTime) < 1e-3 ? 'current' : ''}`}
+              style={{ left: percent(time) }}
+              title={`关键帧 ${formatTime(time)}`}
+              aria-label={`跳到关键帧 ${formatTime(time)}`}
+              onClick={() => onSeek(time)}
+            />
+          ))}
+        </div>
+      )}
       <div className="timeline-hint">拖动空白处新建区间 · 拖动色块移动 · 拖动两侧调整长度 · 拖动两端黑色把手裁剪首尾</div>
     </div>
   )

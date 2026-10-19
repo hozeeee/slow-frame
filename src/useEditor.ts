@@ -1,8 +1,24 @@
 import type { ExportFormat, ExportQuality, MediaInfo } from './media'
+import type { OverlayBox, OverlayImage, OverlayKind, OverlayLayer, OverlayPatch } from './overlay'
 import type { EditState, SessionRecord } from './session'
 import type { CropRect, FlipAxis, FlipState, SpeedRange, TrimRange } from './timeMap'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { browserCapabilityError, exportExtension, exportVideo, inspectMedia } from './media'
+import {
+  clampBox,
+  interpolateBox,
+  makeOverlay,
+  MAX_MOSAIC_SIZE,
+  MAX_OVERLAY_TEXT,
+  MAX_OVERLAYS,
+  MIN_MOSAIC_SIZE,
+  MIN_OVERLAY_SECONDS,
+  nextKindIndex,
+  overlayTimeMarks,
+  prepareImage,
+  removeKeyframe,
+  upsertKeyframe,
+} from './overlay'
 import {
   buildExport,
   defaultEdit,
@@ -51,9 +67,15 @@ export function useEditor() {
   const [trim, setTrim] = useState<TrimRange>({ start: 0, end: 0 })
   const [crop, setCrop] = useState<CropRect | null>(null)
   const [cropAspect, setCropAspect] = useState<number | null>(null)
-  const [cropEditing, setCropEditing] = useState(false)
+  const [isCropEditing, setIsCropEditing] = useState(false)
   const [flip, setFlip] = useState<FlipState>(NO_FLIP)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [overlays, setOverlays] = useState<OverlayLayer[]>([])
+  const [selectedOverlayId, setSelectedOverlayId] = useState<string | null>(null)
+  /** 图片图层的图片，按 imageId 索引；只随本地缓存保存，不进入编辑记录 JSON。 */
+  const [overlayImages, setOverlayImages] = useState<Record<string, OverlayImage>>({})
+  /** 从缓存恢复的原始图片；位图还在解码或解码失败时，自动缓存仍把它们写回，避免丢图。 */
+  const [cachedImageBlobs, setCachedImageBlobs] = useState<Record<string, Blob>>({})
   const [currentTime, setCurrentTime] = useState(0)
   const previewTimeRef = useRef(0)
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false)
@@ -82,12 +104,29 @@ export function useEditor() {
   const activeSpeed = speedAt(currentTime, ranges)
   const isTrimmed = info ? trim.start > 1e-3 || trim.end < info.duration - 1e-3 : false
 
-  const edit = useMemo<EditState>(() => ({ ranges, trim, crop, cropAspect, flip, quality, format }), [ranges, trim, crop, cropAspect, flip, quality, format])
+  const edit = useMemo<EditState>(() => ({ ranges, trim, crop, cropAspect, flip, quality, format, overlays }), [ranges, trim, crop, cropAspect, flip, quality, format, overlays])
   const snapshot = useMemo(() => snapshotOf(edit), [edit])
   const emptySnapshot = useMemo(() => info ? snapshotOf(defaultEdit(info)) : '', [info])
   const dirty = Boolean(file && info && sessionReady && snapshot !== baseline)
   const visibleResultUrl = resultSnapshot === snapshot ? resultUrl : null
   const visibleResultSize = resultSnapshot === snapshot ? resultSize : null
+
+  const selectedOverlay = overlays.find(layer => layer.id === selectedOverlayId) ?? null
+  const overlayMarks = useMemo(() => selectedOverlay ? overlayTimeMarks(selectedOverlay) : null, [selectedOverlay])
+  const imageBitmaps = useMemo(() => new Map(Object.entries(overlayImages).map(([id, image]) => [id, image.bitmap])), [overlayImages])
+  const isImageMissing = useCallback((layer: OverlayLayer) => layer.kind === 'image' && !(layer.imageId && overlayImages[layer.imageId]), [overlayImages])
+  const missingImageCount = overlays.filter(isImageMissing).length
+  // 取半帧：在同一帧内反复拖动只改写这一帧，逐帧步进后再拖则新增关键帧。
+  const keyframeSnap = info && info.fps > 0 ? 0.5 / info.fps : 0.02
+  const referencedImages = useMemo(() => {
+    const result: Record<string, Blob> = {}
+    for (const layer of overlays) {
+      const blob = layer.imageId ? overlayImages[layer.imageId]?.blob ?? cachedImageBlobs[layer.imageId] : undefined
+      if (layer.imageId && blob)
+        result[layer.imageId] = blob
+    }
+    return result
+  }, [overlays, overlayImages, cachedImageBlobs])
 
   const restoreSummary = useMemo(() => {
     if (!pendingRestore || !info)
@@ -100,6 +139,8 @@ export function useEditor() {
       parts.push(`画面裁剪 ${restored.crop.width}×${restored.crop.height}`)
     if (isFlipped(restored.flip))
       parts.push([restored.flip.horizontal && '水平镜像', restored.flip.vertical && '垂直翻转'].filter(Boolean).join(' + '))
+    if (restored.overlays.length)
+      parts.push(`${restored.overlays.length} 个水印/打码图层`)
     return parts.join(' · ')
   }, [pendingRestore, info])
 
@@ -146,10 +187,11 @@ export function useEditor() {
       edit,
       updatedAt: Date.now(),
       exportedSnapshot: baseline === emptySnapshot ? null : baseline,
+      ...(Object.keys(referencedImages).length ? { images: referencedImages } : {}),
     }
     window.clearTimeout(saveTimerRef.current)
     saveTimerRef.current = window.setTimeout(flushSave, 400)
-  }, [file, info, sessionReady, snapshot, emptySnapshot, baseline, edit, flushSave])
+  }, [file, info, sessionReady, snapshot, emptySnapshot, baseline, edit, referencedImages, flushSave])
 
   useEffect(() => {
     const onVisibility = () => {
@@ -252,6 +294,20 @@ export function useEditor() {
     return () => cancelAnimationFrame(animationFrame)
   }, [ranges, mediaUrl, info, isPreviewPlaying, muted, trim.end])
 
+  /** 裁剪编辑与图层编辑互斥：进入裁剪编辑时取消图层选中。 */
+  const setCropEditing = (value: boolean | ((current: boolean) => boolean)) => {
+    const next = typeof value === 'function' ? value(isCropEditing) : value
+    setIsCropEditing(next)
+    if (next)
+      setSelectedOverlayId(null)
+  }
+
+  const selectOverlay = (id: string | null) => {
+    setSelectedOverlayId(id)
+    if (id)
+      setIsCropEditing(false)
+  }
+
   const applyEdit = (next: EditState) => {
     setRanges(next.ranges)
     setTrim(next.trim)
@@ -260,8 +316,30 @@ export function useEditor() {
     setFlip(next.flip)
     setQuality(next.quality)
     setFormat(next.format)
+    // 图片不重置：导入的记录若引用了当前已有的图片，可以直接继续使用。
+    setOverlays(next.overlays)
+    setSelectedOverlayId(null)
     setSelectedId(null)
-    setCropEditing(false)
+    setIsCropEditing(false)
+  }
+
+  /** 从缓存的 Blob 重建图片图层的位图；解码失败的图片按缺失处理。 */
+  const restoreImages = async (blobs: Record<string, Blob>, layers: OverlayLayer[]) => {
+    const token = loadTokenRef.current
+    const ids = [...new Set(layers.map(layer => layer.imageId).filter((id): id is string => Boolean(id && blobs[id])))]
+    const entries = await Promise.all(ids.map(async (id) => {
+      try {
+        return [id, { blob: blobs[id], bitmap: await createImageBitmap(blobs[id]) }] as const
+      }
+      catch {
+        return null
+      }
+    }))
+    if (token !== loadTokenRef.current)
+      return
+    const restored = Object.fromEntries(entries.filter(entry => entry !== null))
+    if (Object.keys(restored).length)
+      setOverlayImages(current => ({ ...current, ...restored }))
   }
 
   const chooseFile = async (nextFile: File) => {
@@ -277,11 +355,15 @@ export function useEditor() {
     setTrim({ start: 0, end: 0 })
     setCrop(null)
     setCropAspect(null)
-    setCropEditing(false)
+    setIsCropEditing(false)
     setFlip(NO_FLIP)
     setQuality('high')
     setFormat('mp4')
     setSelectedId(null)
+    setOverlays([])
+    setSelectedOverlayId(null)
+    setOverlayImages({})
+    setCachedImageBlobs({})
     setCurrentTime(0)
     previewTimeRef.current = 0
     setIsPreviewPlaying(false)
@@ -326,7 +408,12 @@ export function useEditor() {
   const restoreSession = () => {
     if (!pendingRestore || !info)
       return
-    applyEdit(normalizeEdit(pendingRestore.edit, info))
+    const restored = normalizeEdit(pendingRestore.edit, info)
+    applyEdit(restored)
+    if (pendingRestore.images) {
+      setCachedImageBlobs(pendingRestore.images)
+      void restoreImages(pendingRestore.images, restored.overlays)
+    }
     setBaseline(pendingRestore.exportedSnapshot ?? emptySnapshot)
     savedOnceRef.current = true
     setPendingRestore(null)
@@ -385,7 +472,7 @@ export function useEditor() {
       setBaseline(snapshotOf(next))
       savedOnceRef.current = true
       setError(null)
-      setNotice(`已导入编辑记录：${next.ranges.length} 个变速区间`)
+      setNotice(`已导入编辑记录：${next.ranges.length} 个变速区间${next.overlays.length ? `、${next.overlays.length} 个图层` : ''}`)
     }
     catch (reason) {
       setError(reason instanceof Error ? reason.message : '导入编辑记录失败。')
@@ -481,6 +568,149 @@ export function useEditor() {
     setCurrentTime(time)
   }
 
+  const patchOverlay = (id: string, update: (layer: OverlayLayer) => OverlayLayer) => {
+    setOverlays(current => current.map(layer => layer.id === id ? update(layer) : layer))
+  }
+
+  const addOverlay = async (kind: OverlayKind, imageFile?: File) => {
+    if (!info)
+      return
+    if (overlays.length >= MAX_OVERLAYS) {
+      setNotice(`最多添加 ${MAX_OVERLAYS} 个图层`)
+      return
+    }
+    let image: OverlayImage | null = null
+    if (kind === 'image') {
+      if (!imageFile)
+        return
+      try {
+        image = await prepareImage(imageFile)
+      }
+      catch (reason) {
+        setError(reason instanceof Error ? reason.message : '读取图片失败。')
+        return
+      }
+    }
+    const aspect = image ? image.bitmap.width / image.bitmap.height : 1
+    const layer = makeOverlay(kind, previewTimeRef.current, info, nextKindIndex(overlays, kind), aspect)
+    if (image) {
+      const imageId = crypto.randomUUID()
+      const prepared = image
+      layer.imageId = imageId
+      setOverlayImages(current => ({ ...current, [imageId]: prepared }))
+    }
+    setOverlays(current => current.length >= MAX_OVERLAYS ? current : [...current, layer])
+    setIsPreviewPlaying(false)
+    selectOverlay(layer.id)
+  }
+
+  const updateOverlay = (id: string, patch: OverlayPatch) => {
+    const next = { ...patch }
+    if (next.text !== undefined)
+      next.text = next.text.slice(0, MAX_OVERLAY_TEXT)
+    if (next.opacity !== undefined)
+      next.opacity = Math.max(0, Math.min(1, next.opacity))
+    if (next.mosaicSize !== undefined)
+      next.mosaicSize = Math.round(Math.max(MIN_MOSAIC_SIZE, Math.min(MAX_MOSAIC_SIZE, next.mosaicSize)))
+    if (next.name !== undefined)
+      next.name = next.name.slice(0, 40) || undefined
+    patchOverlay(id, layer => ({ ...layer, ...next }))
+  }
+
+  const setOverlaySpan = (id: string, patch: { start?: number, end?: number }) => {
+    if (!info)
+      return
+    const minLength = Math.min(MIN_OVERLAY_SECONDS, info.duration)
+    patchOverlay(id, (layer) => {
+      let { start, end } = layer
+      if (patch.start !== undefined && Number.isFinite(patch.start))
+        start = Math.max(0, Math.min(patch.start, end - minLength))
+      if (patch.end !== undefined && Number.isFinite(patch.end))
+        end = Math.min(info.duration, Math.max(patch.end, start + minLength))
+      return { ...layer, start, end }
+    })
+  }
+
+  const deleteOverlay = (id: string) => {
+    setOverlays(current => current.filter(layer => layer.id !== id))
+    if (selectedOverlayId === id)
+      setSelectedOverlayId(null)
+  }
+
+  /** 调整叠放顺序：delta = 1 上移一层（更靠上），-1 下移一层。 */
+  const moveOverlay = (id: string, delta: 1 | -1) => {
+    setOverlays((current) => {
+      const index = current.findIndex(layer => layer.id === id)
+      const target = index + delta
+      if (index < 0 || target < 0 || target >= current.length)
+        return current
+      const next = [...current]
+      ;[next[index], next[target]] = [next[target], next[index]]
+      return next
+    })
+  }
+
+  /** 拖动或缩放图层框时调用：在当前时间自动创建或更新关键帧。 */
+  const setOverlayBox = (id: string, box: OverlayBox) => {
+    if (!info)
+      return
+    const time = previewTimeRef.current
+    patchOverlay(id, layer => upsertKeyframe(layer, time, clampBox(box, info.width, info.height), keyframeSnap))
+  }
+
+  const addKeyframeHere = (id: string) => {
+    const time = previewTimeRef.current
+    patchOverlay(id, layer => upsertKeyframe(layer, time, interpolateBox(layer, time), keyframeSnap))
+  }
+
+  const deleteKeyframe = (id: string, time: number) => patchOverlay(id, layer => removeKeyframe(layer, time))
+
+  const jumpKeyframe = (id: string, direction: 'prev' | 'next') => {
+    const layer = overlays.find(item => item.id === id)
+    if (!layer)
+      return
+    const now = previewTimeRef.current
+    const times = layer.keyframes.map(frame => frame.time)
+    const target = direction === 'prev'
+      ? times.filter(time => time < now - keyframeSnap).at(-1)
+      : times.find(time => time > now + keyframeSnap)
+    if (target === undefined)
+      return
+    setIsPreviewPlaying(false)
+    seek(target)
+  }
+
+  /** 为图片图层重新选择图片：各关键帧保持宽度与中心，高度按新图片比例调整。 */
+  const setOverlayImage = async (id: string, imageFile: File) => {
+    if (!info)
+      return
+    let image: OverlayImage
+    try {
+      image = await prepareImage(imageFile)
+    }
+    catch (reason) {
+      setError(reason instanceof Error ? reason.message : '读取图片失败。')
+      return
+    }
+    const layer = overlays.find(item => item.id === id)
+    if (!layer)
+      return
+    // 缺失的图片沿用原 id（补回图片不算修改）；替换已有图片时换新 id，使编辑快照发生变化。
+    const imageId = layer.imageId && !overlayImages[layer.imageId] ? layer.imageId : crypto.randomUUID()
+    const aspect = image.bitmap.width / image.bitmap.height
+    setOverlayImages(current => ({ ...current, [imageId]: image }))
+    patchOverlay(id, current => ({
+      ...current,
+      imageId,
+      keyframes: current.keyframes.map((frame) => {
+        const h = frame.w / aspect
+        if (Math.abs(h - frame.h) < 0.5)
+          return frame
+        return { ...frame, ...clampBox({ x: frame.x, y: frame.y + (frame.h - h) / 2, w: frame.w, h }, info.width, info.height) }
+      }),
+    }))
+  }
+
   const togglePreview = () => {
     if (!info)
       return
@@ -518,6 +748,10 @@ export function useEditor() {
         flip,
         quality,
         format,
+        overlays,
+        overlayImages: imageBitmaps,
+        videoWidth: info.width,
+        videoHeight: info.height,
         signal: controller.signal,
         onProgress: setProgress,
       })
@@ -552,9 +786,17 @@ export function useEditor() {
     trim,
     crop,
     cropAspect,
-    cropEditing,
+    cropEditing: isCropEditing,
     flip,
     selectedId,
+    overlays,
+    selectedOverlayId,
+    selectedOverlay,
+    overlayMarks,
+    imageBitmaps,
+    missingImageCount,
+    keyframeSnap,
+    isImageMissing,
     currentTime,
     isPreviewPlaying,
     muted,
@@ -603,6 +845,17 @@ export function useEditor() {
     resetCrop,
     toggleFlip,
     seek,
+    selectOverlay,
+    addOverlay,
+    updateOverlay,
+    setOverlaySpan,
+    deleteOverlay,
+    moveOverlay,
+    setOverlayBox,
+    addKeyframeHere,
+    deleteKeyframe,
+    jumpKeyframe,
+    setOverlayImage,
     togglePreview,
     beginExport,
     cancelExport,

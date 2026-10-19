@@ -21,6 +21,8 @@ interface ExportTabProps {
   exporting: boolean
   progress: number
   disabled: boolean
+  /** 图片缺失的图片图层数，这些图层不会被导出。 */
+  missingImageCount?: number
   onQualityChange: (quality: ExportQuality) => void
   onFormatChange: (format: ExportFormat) => void
   onExport: () => void
@@ -123,6 +125,16 @@ export function ExportTab(props: ExportTabProps) {
             <small>{props.info.hasAudio ? '慢放降调，加速升调，始终保持音画同步' : '将导出纯视频文件'}</small>
           </p>
         </div>
+
+        {Boolean(props.missingImageCount) && (
+          <p className="m-validation">
+            有
+            {' '}
+            {props.missingImageCount}
+            {' '}
+            个图片图层缺少图片，这些图层不会被导出。
+          </p>
+        )}
 
         {props.exporting && (
           <div className="m-progress">

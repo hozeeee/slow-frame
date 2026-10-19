@@ -1,4 +1,5 @@
 import type { ChangeEvent } from 'react'
+import type { OverlayKind } from '../overlay'
 import { useEffect, useRef, useState } from 'react'
 import { flipTransform, formatBytes, formatTime, isFlipped } from '../timeMap'
 import { switchMode } from '../uiMode'
@@ -7,12 +8,15 @@ import { CropOverlay } from './components/CropOverlay'
 import { CropTab } from './components/CropTab'
 import { ExportTab } from './components/ExportTab'
 import { GuideSheet } from './components/GuideSheet'
+import { OverlayCanvas } from './components/OverlayCanvas'
+import { OverlayStage } from './components/OverlayStage'
+import { OverlayTab } from './components/OverlayTab'
 import { RangesTab } from './components/RangesTab'
 import { Sheet } from './components/Sheet'
 import { Timeline } from './components/Timeline'
 import './mobile.css'
 
-type Tab = 'ranges' | 'crop' | 'export'
+type Tab = 'ranges' | 'crop' | 'overlay' | 'export'
 
 /** 导出期间保持屏幕常亮，避免手机自动锁屏导致页面被挂起、编码中断。 */
 function useWakeLock(active: boolean) {
@@ -45,6 +49,9 @@ function useWakeLock(active: boolean) {
 export default function MobileApp() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const sessionInputRef = useRef<HTMLInputElement>(null)
+  const imageInputRef = useRef<HTMLInputElement>(null)
+  /** 图片选择完成后要写入的图层；为空表示新建图片图层。 */
+  const imageTargetRef = useRef<string | null>(null)
   const [tab, setTab] = useState<Tab>('ranges')
   const [menuOpen, setMenuOpen] = useState(false)
   const [guideOpen, setGuideOpen] = useState(false)
@@ -78,6 +85,8 @@ export default function MobileApp() {
     activeSpeed,
     finalDuration,
     isTrimmed,
+    overlays,
+    selectedOverlay,
   } = editor
 
   useWakeLock(exporting)
@@ -98,6 +107,28 @@ export default function MobileApp() {
       void editor.importSession(picked)
   }
 
+  const requestImage = (layerId: string | null) => {
+    imageTargetRef.current = layerId
+    imageInputRef.current?.click()
+  }
+
+  const onImageFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const picked = event.target.files?.[0]
+    event.target.value = ''
+    if (!picked)
+      return
+    const target = imageTargetRef.current
+    if (target)
+      void editor.setOverlayImage(target, picked)
+    else void editor.addOverlay('image', picked)
+  }
+
+  const addOverlay = (kind: OverlayKind) => {
+    if (kind === 'image')
+      requestImage(null)
+    else void editor.addOverlay(kind)
+  }
+
   const selectRange = (id: string | null) => {
     editor.setSelectedId(id)
     if (id)
@@ -114,6 +145,7 @@ export default function MobileApp() {
     <>
       <input ref={fileInputRef} className="m-file-input" type="file" accept="video/*,.mkv,.webm,.mov,.mp4" onChange={onFileChange} />
       <input ref={sessionInputRef} className="m-file-input" type="file" accept=".json,application/json" onChange={onSessionFileChange} />
+      <input ref={imageInputRef} className="m-file-input" type="file" accept="image/*" onChange={onImageFileChange} />
     </>
   )
   const toast = notice && <div className="m-toast" role="status">{notice}</div>
@@ -143,6 +175,7 @@ export default function MobileApp() {
             <li>MP4 / MOV / WebM</li>
             <li>多区间独立变速</li>
             <li>裁剪</li>
+            <li>水印 / 打码</li>
             <li>音画同步</li>
           </ul>
         </section>
@@ -164,6 +197,8 @@ export default function MobileApp() {
   }
 
   const cropBadge = isTrimmed || crop || isFlipped(flip)
+  // 图层编辑框和时间轴上的关键帧只在“图层”标签页显示，避免干扰其它面板的操作。
+  const overlayEditing = tab === 'overlay' && selectedOverlay
   return (
     <div className={`m-app m-workspace ${cropEditing ? 'cropping' : ''}`}>
       <header className="m-topbar">
@@ -205,7 +240,26 @@ export default function MobileApp() {
                   style={{ transform: flipTransform(flip) }}
                   onClick={cropEditing ? undefined : editor.togglePreview}
                 />
+                <OverlayCanvas videoRef={videoRef} videoWidth={info.width} videoHeight={info.height} flip={flip} overlays={overlays} images={editor.imageBitmaps} currentTime={currentTime} playing={isPreviewPlaying} />
                 <CropOverlay videoWidth={info.width} videoHeight={info.height} crop={crop} aspect={cropAspect} editing={cropEditing} onChange={editor.updateCrop} />
+                <OverlayStage
+                  videoWidth={info.width}
+                  videoHeight={info.height}
+                  flip={flip}
+                  layer={overlayEditing ? selectedOverlay : null}
+                  currentTime={currentTime}
+                  active={!isPreviewPlaying && !cropEditing && !exporting}
+                  imageMissing={Boolean(selectedOverlay && editor.isImageMissing(selectedOverlay))}
+                  snap={editor.keyframeSnap}
+                  onChange={(box) => {
+                    if (selectedOverlay)
+                      editor.setOverlayBox(selectedOverlay.id, box)
+                  }}
+                  onRequestImage={() => {
+                    if (selectedOverlay)
+                      requestImage(selectedOverlay.id)
+                  }}
+                />
                 {!cropEditing && (
                   <>
                     <div className="m-badge">
@@ -255,6 +309,7 @@ export default function MobileApp() {
                 onSelect={selectRange}
                 onRangesChange={editor.setRanges}
                 onTrimChange={editor.updateTrim}
+                overlayMarks={overlayEditing ? editor.overlayMarks : null}
               />
 
               <div className="m-scroll">
@@ -296,6 +351,29 @@ export default function MobileApp() {
                     onToggleFlip={editor.toggleFlip}
                   />
                 )}
+                {tab === 'overlay' && (
+                  <OverlayTab
+                    info={info}
+                    overlays={overlays}
+                    selected={selectedOverlay}
+                    currentTime={currentTime}
+                    frameStep={1 / Math.max(1, info.fps)}
+                    snap={editor.keyframeSnap}
+                    exporting={exporting}
+                    isImageMissing={editor.isImageMissing}
+                    onAdd={addOverlay}
+                    onSelect={editor.selectOverlay}
+                    onUpdate={editor.updateOverlay}
+                    onSpanChange={editor.setOverlaySpan}
+                    onDelete={editor.deleteOverlay}
+                    onMove={editor.moveOverlay}
+                    onAddKeyframe={editor.addKeyframeHere}
+                    onDeleteKeyframe={editor.deleteKeyframe}
+                    onJumpKeyframe={editor.jumpKeyframe}
+                    onSeek={editor.seek}
+                    onRequestImage={requestImage}
+                  />
+                )}
                 {tab === 'export' && (
                   <ExportTab
                     info={info}
@@ -309,6 +387,7 @@ export default function MobileApp() {
                     exporting={exporting}
                     progress={progress}
                     disabled={editor.invalidRanges}
+                    missingImageCount={editor.missingImageCount}
                     onQualityChange={editor.setQuality}
                     onFormatChange={editor.setFormat}
                     onExport={() => void editor.beginExport()}
@@ -328,6 +407,11 @@ export default function MobileApp() {
                   <span className="m-tab-icon">⌗</span>
                   裁剪
                   {cropBadge && <i className="m-dot" />}
+                </button>
+                <button type="button" className={tab === 'overlay' ? 'active' : ''} aria-current={tab === 'overlay'} onClick={() => setTab('overlay')}>
+                  <span className="m-tab-icon">◩</span>
+                  图层
+                  {overlays.length > 0 && <em>{overlays.length}</em>}
                 </button>
                 <button type="button" className={tab === 'export' ? 'active' : ''} aria-current={tab === 'export'} onClick={() => setTab('export')}>
                   <span className="m-tab-icon">↓</span>

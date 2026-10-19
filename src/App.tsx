@@ -1,10 +1,14 @@
 import type { ChangeEvent, DragEvent } from 'react'
+import type { OverlayKind } from './overlay'
 import { useRef, useState } from 'react'
 import { CropOverlay } from './components/CropOverlay'
 import { CropPanel } from './components/CropPanel'
 import { ExportPanel } from './components/ExportPanel'
 import { GuideDialog } from './components/GuideDialog'
 import { MobileSuggestion } from './components/MobileSuggestion'
+import { OverlayCanvas } from './components/OverlayCanvas'
+import { OverlayPanel } from './components/OverlayPanel'
+import { OverlayStage } from './components/OverlayStage'
 import { RangePanel } from './components/RangePanel'
 import { Timeline } from './components/Timeline'
 import { flipTransform, formatBytes, formatTime } from './timeMap'
@@ -15,6 +19,9 @@ import './styles.css'
 function App() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const sessionInputRef = useRef<HTMLInputElement>(null)
+  const imageInputRef = useRef<HTMLInputElement>(null)
+  /** 图片选择的用途：null 表示新建图片图层，否则为要替换图片的图层 id。 */
+  const imageTargetRef = useRef<string | null>(null)
   const [draggingFile, setDraggingFile] = useState(false)
   const [guideOpen, setGuideOpen] = useState(false)
   const {
@@ -30,6 +37,13 @@ function App() {
     cropEditing,
     flip,
     selectedId,
+    overlays,
+    selectedOverlay,
+    overlayMarks,
+    imageBitmaps,
+    missingImageCount,
+    keyframeSnap,
+    isImageMissing,
     currentTime,
     isPreviewPlaying,
     muted,
@@ -77,6 +91,17 @@ function App() {
     resetCrop,
     toggleFlip,
     seek,
+    selectOverlay,
+    addOverlay,
+    updateOverlay,
+    setOverlaySpan,
+    deleteOverlay,
+    moveOverlay,
+    setOverlayBox,
+    addKeyframeHere,
+    deleteKeyframe,
+    jumpKeyframe,
+    setOverlayImage,
     togglePreview,
     beginExport,
     cancelExport,
@@ -102,6 +127,28 @@ function App() {
     event.target.value = ''
     if (picked)
       void importSession(picked)
+  }
+
+  const requestImage = (layerId: string | null) => {
+    imageTargetRef.current = layerId
+    imageInputRef.current?.click()
+  }
+
+  const onImageFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const picked = event.target.files?.[0]
+    event.target.value = ''
+    if (!picked)
+      return
+    const target = imageTargetRef.current
+    if (target)
+      void setOverlayImage(target, picked)
+    else void addOverlay('image', picked)
+  }
+
+  const onAddOverlay = (kind: OverlayKind) => {
+    if (kind === 'image')
+      requestImage(null)
+    else void addOverlay(kind)
   }
 
   return (
@@ -140,6 +187,8 @@ function App() {
                   <span>多区间独立变速</span>
                   <i />
                   <span>裁剪</span>
+                  <i />
+                  <span>水印 / 打码</span>
                   <i />
                   <span>音画同步</span>
                 </div>
@@ -226,7 +275,26 @@ function App() {
                             style={{ transform: flipTransform(flip) }}
                             onClick={togglePreview}
                           />
+                          <OverlayCanvas videoRef={videoRef} videoWidth={info.width} videoHeight={info.height} flip={flip} overlays={overlays} images={imageBitmaps} currentTime={currentTime} playing={isPreviewPlaying} />
                           <CropOverlay videoWidth={info.width} videoHeight={info.height} crop={crop} aspect={cropAspect} editing={cropEditing} onChange={updateCrop} />
+                          <OverlayStage
+                            videoWidth={info.width}
+                            videoHeight={info.height}
+                            flip={flip}
+                            layer={selectedOverlay}
+                            currentTime={currentTime}
+                            active={!isPreviewPlaying && !cropEditing && !exporting}
+                            imageMissing={Boolean(selectedOverlay && isImageMissing(selectedOverlay))}
+                            snap={keyframeSnap}
+                            onChange={(box) => {
+                              if (selectedOverlay)
+                                setOverlayBox(selectedOverlay.id, box)
+                            }}
+                            onRequestImage={() => {
+                              if (selectedOverlay)
+                                requestImage(selectedOverlay.id)
+                            }}
+                          />
                           {cropEditing
                             ? (
                                 <div className="crop-toolbar">
@@ -261,7 +329,7 @@ function App() {
                             </div>
                             <button className="secondary-button" onClick={addRange}>＋ 在播放头添加区间</button>
                           </div>
-                          <Timeline duration={info.duration} currentTime={currentTime} ranges={ranges} trim={trim} selectedId={selectedId} onSeek={seek} onSelect={setSelectedId} onRangesChange={setRanges} onTrimChange={updateTrim} />
+                          <Timeline duration={info.duration} currentTime={currentTime} ranges={ranges} trim={trim} selectedId={selectedId} onSeek={seek} onSelect={setSelectedId} onRangesChange={setRanges} onTrimChange={updateTrim} overlayMarks={overlayMarks} />
                           <div className="legend">
                             <span className="slow-swatch" />
                             慢放 &lt; 1×
@@ -271,6 +339,13 @@ function App() {
                             {' '}
                             <span className="trim-swatch" />
                             裁掉
+                            {overlayMarks && (
+                              <>
+                                {' '}
+                                <span className="keyframe-swatch" />
+                                图层关键帧
+                              </>
+                            )}
                           </div>
                         </div>
                         <CropPanel
@@ -292,6 +367,26 @@ function App() {
                           onToggleEditing={() => setCropEditing(value => !value)}
                           onToggleFlip={toggleFlip}
                         />
+                        <OverlayPanel
+                          info={info}
+                          overlays={overlays}
+                          selected={selectedOverlay}
+                          currentTime={currentTime}
+                          snap={keyframeSnap}
+                          exporting={exporting}
+                          isImageMissing={isImageMissing}
+                          onAdd={onAddOverlay}
+                          onSelect={selectOverlay}
+                          onUpdate={updateOverlay}
+                          onSpanChange={setOverlaySpan}
+                          onDelete={deleteOverlay}
+                          onMove={moveOverlay}
+                          onAddKeyframe={addKeyframeHere}
+                          onDeleteKeyframe={deleteKeyframe}
+                          onJumpKeyframe={jumpKeyframe}
+                          onSeek={seek}
+                          onRequestImage={requestImage}
+                        />
                       </div>
 
                       <aside className="side-panel">
@@ -307,6 +402,7 @@ function App() {
                           exporting={exporting}
                           progress={progress}
                           disabled={invalidRanges}
+                          missingImageCount={missingImageCount}
                           onQualityChange={setQuality}
                           onFormatChange={setFormat}
                           onExport={() => void beginExport()}
@@ -346,6 +442,7 @@ function App() {
       {notice && <div className="toast" role="status">{notice}</div>}
       <input ref={fileInputRef} className="file-input" type="file" accept="video/*,.mkv,.webm,.mov,.mp4" onChange={onFileChange} />
       <input ref={sessionInputRef} className="file-input" type="file" accept=".json,application/json" onChange={onSessionFileChange} />
+      <input ref={imageInputRef} className="file-input" type="file" accept="image/*" onChange={onImageFileChange} />
       <footer>
         <span>Slow Frame</span>
         <p>Private by design · No uploads · No tracking</p>

@@ -113,6 +113,26 @@ body:has(.m-app) { margin: 0; min-width: 0; background: #f2f1ed; overscroll-beha
 .m-crop-handle.active i { border-color: var(--accent); }
 .m-crop-size { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); padding: 3px 8px; border-radius: 6px; background: rgba(13, 14, 16, .7); color: white; font-size: 11px; font-style: normal; font-variant-numeric: tabular-nums; white-space: nowrap; pointer-events: none; }
 
+/* 水印 / 打码图层：画布只负责绘制，编辑框只在选中图层且暂停时出现 */
+.m-overlay-canvas, .m-overlay-stage { position: absolute; inset: 0; pointer-events: none; }
+.m-overlay-canvas canvas { position: absolute; display: block; }
+.m-overlay-stage { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.m-overlay-stage-frame { position: absolute; }
+.m-overlay-box { position: absolute; pointer-events: auto; outline: 1.5px dashed rgba(255, 255, 255, .95); box-shadow: 0 0 0 1px rgba(0, 0, 0, .45), inset 0 0 0 1px rgba(0, 0, 0, .35); touch-action: none; }
+.m-overlay-box.active { outline-style: solid; outline-color: var(--accent); }
+/* 把手本身 44px 作为触控热区，可见的只是中心的小方块 */
+.m-overlay-handle { position: absolute; width: 44px; height: 44px; margin: -22px; display: grid; place-items: center; touch-action: none; }
+.m-overlay-handle.nw { left: 0; top: 0; }
+.m-overlay-handle.ne { right: 0; top: 0; }
+.m-overlay-handle.sw { left: 0; bottom: 0; }
+.m-overlay-handle.se { right: 0; bottom: 0; }
+.m-overlay-handle i { width: 14px; height: 14px; border: 2px solid var(--accent); border-radius: 4px; background: white; pointer-events: none; }
+.m-overlay-handle.active i { background: var(--accent); }
+.m-overlay-tag { position: absolute; left: 0; top: -24px; padding: 3px 7px; border-radius: 6px; background: rgba(13, 14, 16, .72); color: white; font-size: 10.5px; font-style: normal; white-space: nowrap; pointer-events: none; }
+.m-overlay-tag.keyframe { background: var(--accent); }
+.m-overlay-missing { position: absolute; inset: 0; width: 100%; padding: 4px; border: 0; background: repeating-linear-gradient(135deg, rgba(240, 90, 55, .55) 0 8px, rgba(13, 14, 16, .55) 8px 16px); color: white; font-size: 11px; font-weight: 750; }
+.m-overlay-stage-hint { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); padding: 5px 10px; border-radius: 999px; background: rgba(13, 14, 16, .72); color: white; font-size: 11px; white-space: nowrap; }
+
 /* 播放控制行 */
 .m-transport { flex: none; min-height: 56px; padding: 6px calc(10px + var(--safe-right)) 6px calc(10px + var(--safe-left)); display: flex; align-items: center; gap: 10px; background: var(--paper); border-bottom: 1px solid var(--line); }
 .m-play { flex: none; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center; background: var(--ink); color: white; font-size: 15px; }
@@ -159,6 +179,13 @@ body:has(.m-app) { margin: 0; min-width: 0; background: #f2f1ed; overscroll-beha
 .m-tl-grip.end { border-radius: 9px 0 0 9px; justify-content: flex-end; transform: translateX(-100%); }
 .m-tl-bubble { position: absolute; top: 2px; transform: translateX(-50%); padding: 4px 9px; border-radius: 7px; background: var(--ink); color: white; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; pointer-events: none; z-index: 4; }
 .m-tl-hint { margin: 6px 0 0; color: #9a9b98; font-size: 10.5px; line-height: 1.45; }
+/* 选中图层的显示时段与关键帧：菱形外层按钮是 32px 的点按热区 */
+.m-tl-lane { position: relative; height: 28px; margin-top: 6px; border-radius: 8px; background: #ecebe6; overflow: hidden; }
+.m-tl-lane-span { position: absolute; top: 12px; height: 4px; border-radius: 2px; background: rgba(240, 90, 55, .45); pointer-events: none; }
+.m-tl-lane-head { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--accent); pointer-events: none; }
+.m-tl-keyframe { position: absolute; top: 0; width: 32px; height: 28px; margin-left: -16px; padding: 0; border: 0; display: grid; place-items: center; background: transparent; }
+.m-tl-keyframe i { width: 11px; height: 11px; border: 1.5px solid white; background: var(--accent); transform: rotate(45deg); pointer-events: none; }
+.m-tl-keyframe.current i { background: var(--ink); }
 
 /* 标签页内容 */
 .m-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
@@ -245,6 +272,23 @@ body:has(.m-app) { margin: 0; min-width: 0; background: #f2f1ed; overscroll-beha
 .m-toggle.active span { color: white; }
 .m-toggle.active small { color: rgba(255, 255, 255, .7); }
 .m-toggle:disabled { opacity: .45; }
+
+/* 图层标签页 */
+.m-overlay-add { display: flex; align-items: center; gap: 6px; }
+.m-overlay-add b { color: var(--accent); }
+.m-chip:disabled { opacity: .45; }
+.m-chip.danger { border-color: #f0c5bb; color: #c4321a; }
+.m-overlay-item .m-range-summary > i.m-overlay-icon { width: 34px; height: 34px; align-self: center; border-radius: 9px; display: grid; place-items: center; background: #ecebe6; color: #55575a; font-size: 15px; font-style: normal; font-weight: 800; }
+.m-overlay-item.open .m-range-summary > i.m-overlay-icon { background: var(--ink); color: white; }
+.m-overlay-key-nav { display: grid; grid-template-columns: 1fr 1.2fr 1fr; gap: 7px; }
+.m-overlay-key-nav .m-chip { padding: 0 8px; }
+.m-overlay-missing-note { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.m-overlay-settings { display: grid; gap: 14px; }
+.m-overlay-emoji { min-width: 44px; font-size: 18px; }
+.m-overlay-inline { display: flex; gap: 10px; }
+.m-overlay-inline label { flex: 1; min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 11px; display: flex; align-items: center; justify-content: space-between; background: white; color: var(--muted); font-size: 13px; font-weight: 650; }
+.m-overlay-inline input[type="color"] { width: 44px; height: 28px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: white; }
+.m-overlay-inline input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--accent); }
 
 /* 底部标签栏 */
 .m-tabbar { flex: none; padding: 0 var(--safe-right) var(--safe-bottom) var(--safe-left); display: flex; background: var(--paper); border-top: 1px solid var(--line); }

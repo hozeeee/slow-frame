@@ -1,4 +1,5 @@
-import type { AudioCodec, OutputFormat, VideoCodec, VideoSample } from 'mediabunny'
+import type { AudioCodec, OutputFormat, VideoCodec } from 'mediabunny'
+import type { OverlayLayer, Surface } from './overlay'
 import type { CropRect, FlipState, SpeedRange, TrimRange } from './timeMap'
 import {
   ALL_FORMATS,
@@ -16,8 +17,10 @@ import {
 
   Quality,
 
+  VideoSample,
   WebMOutputFormat,
 } from 'mediabunny'
+import { createSurface, drawOverlays, visibleOverlays } from './overlay'
 import { isFlipped, sourceToOutputTime, speedAt, trimmedRanges } from './timeMap'
 
 export interface MediaInfo {
@@ -52,6 +55,12 @@ export interface ExportOptions {
   flip: FlipState
   quality: ExportQuality
   format: ExportFormat
+  /** 水印 / 打码图层，坐标为未镜像的原视频显示像素。 */
+  overlays: OverlayLayer[]
+  overlayImages: ReadonlyMap<string, ImageBitmap>
+  /** 原视频显示宽高，用于换算图层的镜像坐标。 */
+  videoWidth: number
+  videoHeight: number
   onProgress: (progress: number) => void
   signal?: AbortSignal
 }
@@ -109,15 +118,52 @@ function outputSpec(format: ExportFormat): { container: OutputFormat, videoCodec
   return { container: new Mp4OutputFormat({ fastStart: false }), videoCodec: 'avc', audioCodec: 'aac' }
 }
 
-function retimeVideo(sample: VideoSample, ranges: SpeedRange[]): VideoSample {
+function mappedTiming(sample: VideoSample, ranges: SpeedRange[]): { timestamp: number, duration: number } {
   const start = sample.timestamp
   const end = start + sample.duration
   const mappedStart = sourceToOutputTime(start, ranges)
   const mappedEnd = sourceToOutputTime(end, ranges)
+  return { timestamp: mappedStart, duration: Math.max(1e-6, mappedEnd - mappedStart) }
+}
+
+function retimeVideo(sample: VideoSample, ranges: SpeedRange[]): VideoSample {
+  const timing = mappedTiming(sample, ranges)
   const result = sample.clone()
-  result.setTimestamp(mappedStart)
-  result.setDuration(Math.max(1e-6, mappedEnd - mappedStart))
+  result.setTimestamp(timing.timestamp)
+  result.setDuration(timing.duration)
   return result
+}
+
+/**
+ * 按源视频时间把图层合成到帧上。process 拿到的帧已经过镜像和裁剪，
+ * 所以图层坐标换算到镜像后的坐标，再减去裁剪框左上角。没有可见图层的帧直接改时间戳。
+ */
+function createVideoProcessor(options: ExportOptions, ranges: SpeedRange[]): (sample: VideoSample) => VideoSample {
+  let surface: Surface | null = null
+  const drawOptions = {
+    flip: options.flip,
+    width: options.videoWidth,
+    height: options.videoHeight,
+    offsetX: options.crop?.left ?? 0,
+    offsetY: options.crop?.top ?? 0,
+    scale: 1,
+    images: options.overlayImages,
+  }
+  return (sample) => {
+    const sourceTime = sample.timestamp + options.trim.start
+    if (!options.overlays.length || !visibleOverlays(options.overlays, sourceTime).length)
+      return retimeVideo(sample, ranges)
+    const width = sample.displayWidth
+    const height = sample.displayHeight
+    if (!surface || surface.canvas.width !== width || surface.canvas.height !== height)
+      surface = createSurface(width, height)
+    const { canvas, context } = surface
+    context.clearRect(0, 0, width, height)
+    sample.draw(context, 0, 0, width, height)
+    drawOverlays(context, canvas, options.overlays, sourceTime, drawOptions)
+    // VideoSample 会立即从画布创建 VideoFrame 快照，下一帧复用同一块画布是安全的。
+    return new VideoSample(canvas, mappedTiming(sample, ranges))
+  }
 }
 
 function audioBoundaries(start: number, end: number, ranges: SpeedRange[]): number[] {
@@ -242,7 +288,7 @@ export async function exportVideo(file: File, options: ExportOptions): Promise<B
         flip: options.flip.horizontal !== options.flip.vertical,
         allowTransformationMetadata: !isFlipped(options.flip),
         crop: options.crop ?? undefined,
-        process: sample => retimeVideo(sample, ranges),
+        process: createVideoProcessor(options, ranges),
       },
       audio: {
         codec: spec.audioCodec,

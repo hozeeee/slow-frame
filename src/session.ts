@@ -1,5 +1,16 @@
 import type { ExportFormat, ExportQuality, MediaInfo } from './media'
+import type { OverlayKeyframe, OverlayKind, OverlayLayer } from './overlay'
 import type { CropRect, FlipState, SpeedRange, TrimRange } from './timeMap'
+import {
+  clampBox,
+  DEFAULT_MOSAIC_SIZE,
+  MAX_MOSAIC_SIZE,
+  MAX_OVERLAY_TEXT,
+  MAX_OVERLAYS,
+  MIN_MOSAIC_SIZE,
+  MIN_OVERLAY_SECONDS,
+  OVERLAY_KINDS,
+} from './overlay'
 import {
   clampCrop,
   clampRange,
@@ -22,6 +33,8 @@ export interface EditState {
   flip: FlipState
   quality: ExportQuality
   format: ExportFormat
+  /** 水印 / 打码图层，数组顺序即叠放顺序（后者在上）；旧版本的记录没有该字段。 */
+  overlays: OverlayLayer[]
 }
 
 export interface SessionFile {
@@ -41,6 +54,8 @@ export interface SessionRecord {
   updatedAt: number
   /** 最近一次导出编辑记录时的快照，用于判断是否有未导出的修改。 */
   exportedSnapshot: string | null
+  /** 图片图层引用的图片，只保存在缓存里，不进入导出的编辑记录。 */
+  images?: Record<string, Blob>
 }
 
 export interface SessionExport {
@@ -72,7 +87,7 @@ export function describeFile(file: File, info: MediaInfo): SessionFile {
 }
 
 export function defaultEdit(info: MediaInfo): EditState {
-  return { ranges: [], trim: { start: 0, end: info.duration }, crop: null, cropAspect: null, flip: NO_FLIP, quality: 'high', format: 'mp4' }
+  return { ranges: [], trim: { start: 0, end: info.duration }, crop: null, cropAspect: null, flip: NO_FLIP, quality: 'high', format: 'mp4', overlays: [] }
 }
 
 const round = (value: number) => Math.round(value * 10_000) / 10_000
@@ -88,6 +103,25 @@ export function snapshotOf(edit: EditState): string {
     ...(isFlipped(edit.flip ?? NO_FLIP) ? { flip: [edit.flip.horizontal, edit.flip.vertical] } : {}),
     quality: edit.quality,
     format: edit.format,
+    // 同 flip：没有图层时不写入，旧快照保持可比较。
+    ...(edit.overlays?.length
+      ? {
+          overlays: edit.overlays.map(layer => [
+            layer.kind,
+            layer.name ?? '',
+            round(layer.start),
+            round(layer.end),
+            layer.easing,
+            round(layer.opacity),
+            layer.keyframes.map(frame => [round(frame.time), round(frame.x), round(frame.y), round(frame.w), round(frame.h)]),
+            layer.text ?? '',
+            layer.color ?? '',
+            Boolean(layer.outline),
+            layer.imageId ?? '',
+            layer.mosaicSize ?? 0,
+          ]),
+        }
+      : {}),
   })
 }
 
@@ -128,7 +162,66 @@ export function normalizeEdit(raw: unknown, info: MediaInfo): EditState {
   const flip: FlipState = { horizontal: rawFlip.horizontal === true, vertical: rawFlip.vertical === true }
   const quality = QUALITIES.includes(data.quality as ExportQuality) ? data.quality as ExportQuality : 'high'
   const format = FORMATS.includes(data.format as ExportFormat) ? data.format as ExportFormat : 'mp4'
-  return { ranges, trim, crop, cropAspect, flip, quality, format }
+  const overlays = normalizeOverlays(data.overlays, info)
+  return { ranges, trim, crop, cropAspect, flip, quality, format, overlays }
+}
+
+const KINDS = new Set<OverlayKind>(OVERLAY_KINDS.map(item => item.kind))
+const COLOR_PATTERN = /^#[0-9a-f]{6}$/i
+
+function normalizeOverlays(raw: unknown, info: MediaInfo): OverlayLayer[] {
+  if (!Array.isArray(raw))
+    return []
+  const finite = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value)
+  const clampTime = (value: number) => Math.max(0, Math.min(info.duration, value))
+  const result: OverlayLayer[] = []
+  const usedIds = new Set<string>()
+  for (const entry of raw) {
+    if (result.length >= MAX_OVERLAYS)
+      break
+    const item = (entry ?? {}) as Partial<Record<keyof OverlayLayer, unknown>>
+    if (!KINDS.has(item.kind as OverlayKind))
+      continue
+    const kind = item.kind as OverlayKind
+
+    const frames = (Array.isArray(item.keyframes) ? item.keyframes : [])
+      .map(frame => (frame ?? {}) as Partial<Record<keyof OverlayKeyframe, unknown>>)
+      .filter(frame => finite(frame.time) && finite(frame.x) && finite(frame.y) && finite(frame.w) && finite(frame.h))
+      .map(frame => ({ time: clampTime(frame.time as number), ...clampBox(frame as OverlayKeyframe, info.width, info.height) }))
+      .sort((a, b) => a.time - b.time)
+    const keyframes = frames.filter((frame, index) => index === 0 || frame.time - frames[index - 1].time > 1e-6)
+    if (!keyframes.length)
+      continue
+
+    let start = clampTime(finite(item.start) ? item.start : 0)
+    let end = clampTime(finite(item.end) ? item.end : info.duration)
+    if (end - start < MIN_OVERLAY_SECONDS) {
+      start = Math.max(0, Math.min(start, info.duration - MIN_OVERLAY_SECONDS))
+      end = Math.min(info.duration, start + MIN_OVERLAY_SECONDS)
+    }
+
+    const text = typeof item.text === 'string' ? item.text.slice(0, MAX_OVERLAY_TEXT) : undefined
+    const color = typeof item.color === 'string' && COLOR_PATTERN.test(item.color) ? item.color.toLowerCase() : undefined
+    const id = typeof item.id === 'string' && item.id && !usedIds.has(item.id) ? item.id : crypto.randomUUID()
+    usedIds.add(id)
+    result.push({
+      id,
+      name: typeof item.name === 'string' ? item.name.trim().slice(0, 40) || undefined : undefined,
+      kind,
+      start,
+      end,
+      easing: item.easing === 'hold' ? 'hold' : 'linear',
+      opacity: finite(item.opacity) ? Math.max(0, Math.min(1, item.opacity)) : 1,
+      keyframes,
+      ...(kind === 'text' || kind === 'emoji' ? { text, outline: item.outline === true } : {}),
+      ...(kind === 'text' || kind === 'solid' ? { color: color ?? (kind === 'text' ? '#ffffff' : '#000000') } : {}),
+      ...(kind === 'image' && typeof item.imageId === 'string' && item.imageId ? { imageId: item.imageId } : {}),
+      ...(kind === 'mosaic'
+        ? { mosaicSize: finite(item.mosaicSize) ? Math.round(Math.max(MIN_MOSAIC_SIZE, Math.min(MAX_MOSAIC_SIZE, item.mosaicSize))) : DEFAULT_MOSAIC_SIZE }
+        : {}),
+    })
+  }
+  return result
 }
 
 export function buildExport(file: SessionFile, edit: EditState): SessionExport {
