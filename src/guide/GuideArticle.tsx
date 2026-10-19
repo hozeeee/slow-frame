@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import type { GuideBlock, GuideSection } from './content'
 import { Fragment, useEffect, useState } from 'react'
+import { copyText } from '../clipboard'
 import './guide.css'
 
 interface GuideArticleProps {
@@ -59,25 +60,6 @@ function Inline({ text, highlight, onJump }: { text: string, highlight: RegExp |
     }
     return <a key={key} href={href} target="_blank" rel="noreferrer">{mark(label, highlight)}</a>
   })
-}
-
-async function copyText(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text)
-    return true
-  }
-  catch {
-    // 非安全上下文或权限被拒时退回到旧的复制方式。
-    const area = document.createElement('textarea')
-    area.value = text
-    area.style.position = 'fixed'
-    area.style.opacity = '0'
-    document.body.append(area)
-    area.select()
-    const ok = document.execCommand('copy')
-    area.remove()
-    return ok
-  }
 }
 
 function CodeBlock({ title, code, highlight }: { title?: string, code: string, highlight: RegExp | null }) {

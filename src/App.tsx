@@ -84,6 +84,7 @@ function App() {
     addRange,
     updateRange,
     deleteRange,
+    importRanges,
     updateTrim,
     resetTrim,
     updateCrop,
@@ -390,7 +391,7 @@ function App() {
                       </div>
 
                       <aside className="side-panel">
-                        <RangePanel ranges={orderedRanges} trim={trim} duration={info.duration} selectedId={selectedId} invalid={invalidRanges} onSelect={setSelectedId} onUpdate={updateRange} onDelete={deleteRange} />
+                        <RangePanel ranges={orderedRanges} trim={trim} info={info} fileName={file.name} selectedId={selectedId} invalid={invalidRanges} onSelect={setSelectedId} onUpdate={updateRange} onDelete={deleteRange} onImport={importRanges} />
                         <ExportPanel
                           info={info}
                           quality={quality}

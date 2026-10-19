@@ -317,7 +317,8 @@ export default function MobileApp() {
                   <RangesTab
                     ranges={orderedRanges}
                     trim={trim}
-                    duration={info.duration}
+                    info={info}
+                    fileName={file.name}
                     frameStep={1 / Math.max(1, info.fps)}
                     currentTime={currentTime}
                     selectedId={selectedId}
@@ -327,6 +328,8 @@ export default function MobileApp() {
                     onSeek={editor.seek}
                     onUpdate={editor.updateRange}
                     onDelete={editor.deleteRange}
+                    onImport={editor.importRanges}
+                    onNotice={editor.setNotice}
                   />
                 )}
                 {tab === 'crop' && (

@@ -1,19 +1,52 @@
+import type { RangeImportMode } from '../aiRanges'
+import type { MediaInfo } from '../media'
 import type { SpeedRange, TrimRange } from '../timeMap'
+import { useEffect, useState } from 'react'
+import { buildRangePrompt, IMPORT_STEPS, PROMPT_STEPS } from '../aiRanges'
+import { copyText } from '../clipboard'
 import { formatTime, MAX_SPEED, MIN_SPEED } from '../timeMap'
+import { HoverTip } from './HoverTip'
 import { NumberInput } from './NumberInput'
+import { RangeImportDialog } from './RangeImportDialog'
 
 interface RangePanelProps {
   ranges: SpeedRange[]
   trim: TrimRange
-  duration: number
+  info: MediaInfo
+  fileName: string
   selectedId: string | null
   invalid: boolean
   onSelect: (id: string) => void
   onUpdate: (id: string, patch: Partial<SpeedRange>) => void
   onDelete: (id: string) => void
+  onImport: (ranges: SpeedRange[], mode: RangeImportMode) => void
 }
 
-export function RangePanel({ ranges, trim, duration, selectedId, invalid, onSelect, onUpdate, onDelete }: RangePanelProps) {
+function StepsTip({ title, steps }: { title: string, steps: string[] }) {
+  return (
+    <>
+      <strong>{title}</strong>
+      <ol>{steps.map(step => <li key={step}>{step}</li>)}</ol>
+    </>
+  )
+}
+
+export function RangePanel({ ranges, trim, info, fileName, selectedId, invalid, onSelect, onUpdate, onDelete, onImport }: RangePanelProps) {
+  const duration = info.duration
+  const [importOpen, setImportOpen] = useState(false)
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
+
+  useEffect(() => {
+    if (copyState === 'idle')
+      return
+    const timer = window.setTimeout(setCopyState, 1800, 'idle')
+    return () => window.clearTimeout(timer)
+  }, [copyState])
+
+  const copyPrompt = () => {
+    void copyText(buildRangePrompt(info, fileName, trim)).then(ok => setCopyState(ok ? 'copied' : 'failed'))
+  }
+
   return (
     <div className="side-section range-section">
       <div className="section-title-row compact">
@@ -22,6 +55,19 @@ export function RangePanel({ ranges, trim, duration, selectedId, invalid, onSele
           <h2>变速区间</h2>
         </div>
         <span className="count-badge">{ranges.length}</span>
+      </div>
+      <div className="range-ai-tools">
+        <span>AI 标注</span>
+        <div className="range-ai-group" role="group" aria-label="AI 标注变速区间">
+          <HoverTip tip={<StepsTip title="第 1 步：把提示词和视频交给 AI" steps={PROMPT_STEPS} />}>
+            <button type="button" className={copyState} onClick={copyPrompt}>
+              {copyState === 'copied' ? '✓ 已复制' : copyState === 'failed' ? '复制失败' : '复制提示词'}
+            </button>
+          </HoverTip>
+          <HoverTip tip={<StepsTip title="第 2 步：导入 AI 返回的 JSON" steps={IMPORT_STEPS} />}>
+            <button type="button" onClick={() => setImportOpen(true)}>导入 JSON</button>
+          </HoverTip>
+        </div>
       </div>
       {ranges.length === 0
         ? (
@@ -102,6 +148,7 @@ export function RangePanel({ ranges, trim, duration, selectedId, invalid, onSele
           × 之间。
         </p>
       )}
+      {importOpen && <RangeImportDialog duration={duration} trim={trim} existingCount={ranges.length} onImport={onImport} onClose={() => setImportOpen(false)} />}
     </div>
   )
 }

@@ -1,14 +1,20 @@
+import type { RangeImportMode } from '../../aiRanges'
+import type { MediaInfo } from '../../media'
 import type { SpeedRange, TrimRange } from '../../timeMap'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { buildRangePrompt, IMPORT_STEPS, PROMPT_STEPS } from '../../aiRanges'
+import { copyText } from '../../clipboard'
 import { formatTime, MAX_SPEED, MIN_SPEED } from '../../timeMap'
 import { NumberField } from './NumberField'
+import { RangeImportSheet } from './RangeImportSheet'
 
 const SPEED_PRESETS = [0.1, 0.25, 0.5, 0.75, 1.5, 2, 4]
 
 interface RangesTabProps {
   ranges: SpeedRange[]
   trim: TrimRange
-  duration: number
+  info: MediaInfo
+  fileName: string
   frameStep: number
   currentTime: number
   selectedId: string | null
@@ -18,11 +24,20 @@ interface RangesTabProps {
   onSeek: (time: number) => void
   onUpdate: (id: string, patch: Partial<SpeedRange>) => void
   onDelete: (id: string) => void
+  onImport: (ranges: SpeedRange[], mode: RangeImportMode) => void
+  onNotice: (message: string) => void
 }
 
 /** 变速区间列表：收起时为一行摘要，点按展开为完整的编辑卡片。 */
-export function RangesTab({ ranges, trim, duration, frameStep, currentTime, selectedId, invalid, onAdd, onSelect, onSeek, onUpdate, onDelete }: RangesTabProps) {
+export function RangesTab({ ranges, trim, info, fileName, frameStep, currentTime, selectedId, invalid, onAdd, onSelect, onSeek, onUpdate, onDelete, onImport, onNotice }: RangesTabProps) {
+  const duration = info.duration
   const listRef = useRef<HTMLDivElement>(null)
+  const [helpOpen, setHelpOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
+
+  const copyPrompt = () => {
+    void copyText(buildRangePrompt(info, fileName, trim)).then(ok => onNotice(ok ? '提示词已复制，连同视频一起发给 AI' : '复制失败，请检查浏览器的剪贴板权限'))
+  }
 
   // 在时间轴上选中区间时，把对应卡片滚动到可见位置。
   useEffect(() => {
@@ -41,6 +56,22 @@ export function RangesTab({ ranges, trim, duration, frameStep, currentTime, sele
           </h2>
         </div>
         <button type="button" className="m-pill-button" onClick={onAdd}>＋ 在播放头添加</button>
+      </div>
+
+      <div className="m-ai-tools">
+        <div className="m-ai-head">
+          <span>AI 标注</span>
+          <button type="button" className="m-text-button" aria-expanded={helpOpen} onClick={() => setHelpOpen(value => !value)}>{helpOpen ? '收起说明' : '怎么用？'}</button>
+        </div>
+        <div className="m-ai-group" role="group" aria-label="AI 标注变速区间">
+          <button type="button" onClick={copyPrompt}>复制提示词</button>
+          <button type="button" onClick={() => setImportOpen(true)}>导入 JSON</button>
+        </div>
+        {helpOpen && (
+          <ol className="m-ai-steps">
+            {[...PROMPT_STEPS, ...IMPORT_STEPS].map(step => <li key={step}>{step}</li>)}
+          </ol>
+        )}
       </div>
 
       {ranges.length === 0
@@ -168,6 +199,7 @@ export function RangesTab({ ranges, trim, duration, frameStep, currentTime, sele
           × 之间。
         </p>
       )}
+      {importOpen && <RangeImportSheet duration={duration} trim={trim} existingCount={ranges.length} onImport={onImport} onClose={() => setImportOpen(false)} />}
     </section>
   )
 }

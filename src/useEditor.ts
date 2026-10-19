@@ -1,8 +1,10 @@
+import type { RangeImportMode } from './aiRanges'
 import type { ExportFormat, ExportQuality, MediaInfo } from './media'
 import type { OverlayBox, OverlayImage, OverlayKind, OverlayLayer, OverlayPatch } from './overlay'
 import type { EditState, SessionRecord } from './session'
 import type { CropRect, FlipAxis, FlipState, SpeedRange, TrimRange } from './timeMap'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { appendRanges } from './aiRanges'
 import { browserCapabilityError, exportExtension, exportVideo, inspectMedia } from './media'
 import {
   clampBox,
@@ -514,6 +516,26 @@ export function useEditor() {
 
   const deleteRange = (id: string) => setRanges(current => current.filter(item => item.id !== id))
 
+  /** 导入已校正过的区间（如 AI 生成的配置）：替换全部区间，或追加并跳过与现有区间重叠的部分。 */
+  const importRanges = (incoming: SpeedRange[], mode: RangeImportMode) => {
+    if (!info)
+      return
+    if (mode === 'replace') {
+      setRanges(incoming)
+      setSelectedId(null)
+      setNotice(`已导入 ${incoming.length} 个变速区间`)
+      return
+    }
+    const result = appendRanges(ranges, incoming)
+    const added = incoming.length - result.skipped
+    if (added)
+      setRanges(result.ranges)
+    setSelectedId(null)
+    setNotice(added
+      ? `已追加 ${added} 个变速区间${result.skipped ? `，跳过 ${result.skipped} 个与现有区间重叠的` : ''}`
+      : '导入的区间都与现有区间重叠，未追加')
+  }
+
   const updateTrim = (patch: Partial<TrimRange>) => {
     if (!info)
       return
@@ -838,6 +860,7 @@ export function useEditor() {
     addRange,
     updateRange,
     deleteRange,
+    importRanges,
     updateTrim,
     resetTrim,
     updateCrop,
